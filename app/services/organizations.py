@@ -9,7 +9,7 @@ import functools
 import re
 from typing import Any, Callable
 
-from flask import abort, g, redirect, request, session, url_for
+from flask import abort, flash, g, redirect, request, session, url_for
 
 from app.services.supabase_client import get_service_client
 
@@ -56,8 +56,24 @@ def get_membership(user_id: str) -> dict[str, Any] | None:
 def load_current_context() -> None:
     """Popula g.user e g.membership a cada requisição (before_request)."""
     g.user = get_current_user()
+    if not g.user:
+        g.membership = None
+        return
     try:
-        g.membership = get_membership(g.user["id"]) if g.user else None
+        g.membership = get_membership(g.user["id"])
+        # Se usuário existe mas não tem organização, cria uma automaticamente
+        # (caso de usuários criados antes do schema SQL ser executado)
+        if not g.membership:
+            try:
+                org = create_organization_for_user(g.user["id"], "Minha Organização")
+                g.membership = {
+                    "organization_id": org["id"],
+                    "role": "owner",
+                    "org_name": org["name"],
+                    "org_slug": org["slug"],
+                }
+            except Exception:
+                g.membership = None
     except Exception:
         # Se as tabelas não existirem (schema não executado), membership é None
         g.membership = None
@@ -93,7 +109,11 @@ def org_required(view: Callable) -> Callable:
         if not g.get("user"):
             return redirect(url_for("auth.login", next=request.path))
         if not g.get("membership"):
-            abort(403, description="Usuário sem organização associada.")
+            flash(
+                "Não foi possível carregar sua organização. Verifique se o schema SQL foi executado no Supabase e faça login novamente.",
+                "error",
+            )
+            return redirect(url_for("auth.logout"))
         return view(*args, **kwargs)
 
     return wrapper
@@ -108,7 +128,11 @@ def require_role(*roles: str) -> Callable:
         def wrapper(*args: Any, **kwargs: Any):
             membership = g.get("membership")
             if not membership:
-                abort(403, description="Usuário sem organização associada.")
+                flash(
+                    "Não foi possível carregar sua organização. Verifique se o schema SQL foi executado no Supabase.",
+                    "error",
+                )
+                return redirect(url_for("auth.logout"))
             if ROLE_RANK.get(membership["role"], 0) < min_rank:
                 abort(403, description="Permissão insuficiente para esta ação.")
             return view(*args, **kwargs)

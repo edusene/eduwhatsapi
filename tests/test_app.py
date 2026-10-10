@@ -74,11 +74,13 @@ class TestIsolation:
         assert r.status_code == 200
         assert b"ChaveOutraOrg" not in r.data  # não deve aparecer na lista da org do usuário
 
-    def test_dashboard_requires_org(self, client):
+    def test_dashboard_auto_creates_org(self, client, fake_db):
+        # Usuário sem organização deve ter uma criada automaticamente
         with client.session_transaction() as sess:
             sess["user"] = {"id": "no-org-user", "email": "x@y.com"}
         r = client.get("/dashboard/", follow_redirects=False)
-        assert r.status_code == 403
+        # Após criar org automaticamente, deve acessar o dashboard
+        assert r.status_code == 200
 
 
 class TestApiKeys:
