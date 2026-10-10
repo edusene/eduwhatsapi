@@ -56,7 +56,11 @@ def get_membership(user_id: str) -> dict[str, Any] | None:
 def load_current_context() -> None:
     """Popula g.user e g.membership a cada requisição (before_request)."""
     g.user = get_current_user()
-    g.membership = get_membership(g.user["id"]) if g.user else None
+    try:
+        g.membership = get_membership(g.user["id"]) if g.user else None
+    except Exception:
+        # Se as tabelas não existirem (schema não executado), membership é None
+        g.membership = None
 
 
 def create_organization_for_user(user_id: str, name: str) -> dict[str, Any]:

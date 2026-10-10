@@ -198,15 +198,14 @@ body {
 .sidebar-footer .org {
   font-size: 0.85rem;
   color: var(--fg-muted);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
-.btn-link {
-  background: none;
-  border: none;
-  color: var(--primary-light);
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0;
+.sidebar-footer form {
+  margin: 0;
+}
+.sidebar-footer .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 /* ===== MAIN CONTENT ===== */

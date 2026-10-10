@@ -15,7 +15,11 @@ bp = Blueprint("dashboard", __name__)
 def _org_id() -> str:
     m = g.get("membership")
     if not m:
-        abort(403, description="Sem organização.")
+        flash(
+            "Organização não encontrada. Execute o schema SQL no Supabase e faça login novamente.",
+            "error",
+        )
+        return redirect(url_for("auth.logout"))
     return m["organization_id"]
 
 
@@ -25,42 +29,53 @@ def _org_id() -> str:
 def overview():
     org_id = _org_id()
     client = get_service_client()
-    conns = (
-        client.table("meta_connections")
-        .select("id, status")
-        .eq("organization_id", org_id)
-        .execute()
-    )
-    active_conns = sum(1 for c in conns.data if c.get("status") == "active")
-    keys = (
-        client.table("api_keys")
-        .select("id, revoked_at")
-        .eq("organization_id", org_id)
-        .execute()
-    )
-    active_keys = sum(1 for k in keys.data if not k.get("revoked_at"))
-    since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    logs = (
-        client.table("api_request_logs")
-        .select("id, created_at")
-        .eq("organization_id", org_id)
-        .execute()
-    )
-    logs_24h = sum(1 for r in logs.data if r.get("created_at", "") >= since)
-    events = (
-        client.table("webhook_events")
-        .select("id, event_type, received_at, status")
-        .eq("organization_id", org_id)
-        .order("received_at", desc=True)
-        .limit(10)
-        .execute()
-    )
+    try:
+        conns = (
+            client.table("meta_connections")
+            .select("id, status")
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        active_conns = sum(1 for c in conns.data if c.get("status") == "active")
+        keys = (
+            client.table("api_keys")
+            .select("id, revoked_at")
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        active_keys = sum(1 for k in keys.data if not k.get("revoked_at"))
+        since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        logs = (
+            client.table("api_request_logs")
+            .select("id, created_at")
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        logs_24h = sum(1 for r in logs.data if r.get("created_at", "") >= since)
+        events = (
+            client.table("webhook_events")
+            .select("id, event_type, received_at, status")
+            .eq("organization_id", org_id)
+            .order("received_at", desc=True)
+            .limit(10)
+            .execute()
+        )
+        recent_events = events.data
+    except Exception as exc:
+        flash(
+            "Erro ao carregar dados. Verifique se o schema SQL foi executado no Supabase.",
+            "error",
+        )
+        active_conns = 0
+        active_keys = 0
+        logs_24h = 0
+        recent_events = []
     return render_template(
         "dashboard/overview.html",
         active_conns=active_conns,
         active_keys=active_keys,
         logs_24h=logs_24h,
-        recent_events=events.data,
+        recent_events=recent_events,
     )
 
 

@@ -34,9 +34,9 @@
     </nav>
     <div class="sidebar-footer">
       <div class="org">{{ membership.org_name or 'Organização' }}</div>
-      <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
+      <form method="post" action="{{ url_for('auth.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn-link">Sair</button>
+        <button type="submit" class="btn btn-secondary btn-sm btn-block">Sair da conta</button>
       </form>
     </div>
   </aside>
