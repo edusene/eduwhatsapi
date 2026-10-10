@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   {% block extra_head %}{% endblock %}
 </head>
-<body class="{% if current_user %}app-body{% else %}auth-body{% endif %}">
+<body class="{% if request.endpoint in ['auth.termos', 'auth.privacidade'] %}legal-body {% endif %}{% if current_user %}app-body{% else %}auth-body{% endif %}">
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
   <div class="flash-bar" role="status" aria-live="polite">

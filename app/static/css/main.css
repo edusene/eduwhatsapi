@@ -386,6 +386,12 @@ tr:hover td { background: var(--bg-hover); }
 }
 
 /* ===== LEGAL PAGES ===== */
+.legal-body { align-items: flex-start !important; overflow-y: auto; }
+.legal-body .auth-card {
+  max-width: 720px;
+  margin-top: 40px;
+  margin-bottom: 40px;
+}
 .legal-page { width: 100%; }
 .legal-updated {
   text-align: center;
@@ -394,7 +400,7 @@ tr:hover td { background: var(--bg-hover); }
   margin-bottom: 24px;
 }
 .legal-content {
-  background: var(--bg-card);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 28px;
