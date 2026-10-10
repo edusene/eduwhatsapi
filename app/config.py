@@ -49,6 +49,11 @@ class Config:
 
     # Supabase
     SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    # Remove qualquer path acidental (ex: /rest/v1) da URL base
+    if SUPABASE_URL and "/" in SUPABASE_URL.replace("https://", "").replace("http://", ""):
+        from urllib.parse import urlparse
+        parsed = urlparse(SUPABASE_URL)
+        SUPABASE_URL = f"{parsed.scheme}://{parsed.netloc}"
     SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
     SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 

@@ -122,7 +122,12 @@ def register_post():
     except Exception as exc:
         logger.warning("Falha no registro para %s: %s", email, str(exc))
         msg = str(exc).lower()
-        if "already" in msg or "exists" in msg or "duplicate" in msg:
+        if "invalid path" in msg or "404" in msg:
+            flash(
+                "Erro de configuração do Supabase. Verifique se SUPABASE_URL está correto (ex: https://seu-projeto.supabase.co).",
+                "error",
+            )
+        elif "already" in msg or "exists" in msg or "duplicate" in msg:
             flash("Este e-mail já está cadastrado.", "error")
         elif "password" in msg:
             flash("A senha é muito fraca ou inválida.", "error")
