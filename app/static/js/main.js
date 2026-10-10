@@ -1,4 +1,4 @@
-/* MetaBridge — scripts do painel */
+/* AutoZap — scripts do painel */
 (function () {
   // Confirmação em ações destrutivas
   document.querySelectorAll('[data-confirm]').forEach(function (btn) {

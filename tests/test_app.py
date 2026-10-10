@@ -1,4 +1,4 @@
-"""Testes do MVP MetaBridge.
+"""Testes do MVP AutoZap.
 
 Cobrem health, páginas públicas, autenticação, isolamento, API keys,
 webhooks de entrada/saída, proxy para Meta e modo de desenvolvimento.

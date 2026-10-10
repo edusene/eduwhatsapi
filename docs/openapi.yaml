@@ -1,14 +1,14 @@
 openapi: 3.0.3
 info:
-  title: EduAuto — API Pública
+  title: AutoZap — API Pública
   version: 1.0.0
   description: >-
-    API pública da plataforma EduAuto para envio de mensagens via WhatsApp
+    API pública da plataforma AutoZap para envio de mensagens via WhatsApp
     Cloud API (Meta) e consulta de canais e uso. A autenticação usa chaves
     internas da plataforma (sk_test_/sk_live_), que NÃO são tokens da Meta —
     os tokens da Meta ficam criptografados no servidor.
   contact:
-    name: Suporte EduAuto
+    name: Suporte AutoZap
 servers:
   - url: https://SUA-URL.onrender.com/api/v1
     description: Produção (Render)
@@ -230,7 +230,7 @@ components:
       scheme: bearer
       description: >-
         Chave interna da plataforma no formato sk_test_... ou sk_live_...,
-        criada no painel da EduAuto. NÃO é um token da Meta — os tokens da
+        criada no painel da AutoZap. NÃO é um token da Meta — os tokens da
         Meta nunca saem do servidor.
   schemas:
     Channel:

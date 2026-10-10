@@ -1,13 +1,13 @@
-/* MetaBridge — Design Moderno */
+/* AutoZap — Design Moderno */
 :root {
   --bg: #0f172a;
   --bg-card: #1e293b;
   --bg-hover: #334155;
   --fg: #f1f5f9;
   --fg-muted: #94a3b8;
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-light: #818cf8;
+  --primary: #22c55e;
+  --primary-hover: #16a34a;
+  --primary-light: #4ade80;
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
@@ -31,7 +31,7 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #0c4a6e 100%);
   padding: 20px;
 }
 .auth-card {
@@ -58,7 +58,22 @@ body {
 .auth-logo p {
   color: var(--fg-muted);
   font-size: 0.9rem;
-  margin-top: 4px;
+  margin-top: 12px;
+}
+.auth-logo-img {
+  max-width: 180px;
+  height: auto;
+  display: inline-block;
+}
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.brand-logo {
+  max-width: 160px;
+  height: auto;
+  display: block;
 }
 .auth-title {
   font-size: 1.25rem;
@@ -91,7 +106,7 @@ body {
 .form-group select:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
 }
 .form-group input::placeholder { color: var(--fg-muted); }
 
@@ -187,7 +202,7 @@ body {
 }
 .sidebar-nav a:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar-nav a.active {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(34, 197, 94, 0.15);
   color: var(--primary-light);
   border-left-color: var(--primary);
 }
@@ -283,7 +298,7 @@ tr:hover td { background: var(--bg-hover); }
 .badge-active, .badge-live { background: rgba(34, 197, 94, 0.2); color: #86efac; }
 .badge-pending { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
 .badge-error, .badge-revoked, .badge-failed { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-.badge-test { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+.badge-test { background: rgba(34, 197, 94, 0.2); color: #86efac; }
 .badge-role { background: var(--bg-hover); color: var(--fg-muted); }
 
 /* ===== SECRET BOX ===== */

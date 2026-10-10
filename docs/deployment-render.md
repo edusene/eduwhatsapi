@@ -18,7 +18,7 @@ Envie o código para um repositório GitHub (ou GitLab). Certifique-se de que `.
 No painel do Render (Environment), defina TODAS as variáveis de `.env.example` com valores reais.
 
 Importantes:
-- `APP_BASE_URL` = URL pública do Render (ex.: `https://meta-saas-xyz.onrender.com`).
+- `APP_BASE_URL` = URL pública do Render (ex.: `https://autozap.onrender.com`).
 - `SESSION_COOKIE_SECURE` = `true` (HTTPS).
 - `META_REDIRECT_URI` = `https://.../connect/meta/callback`.
 

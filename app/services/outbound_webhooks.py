@@ -47,7 +47,7 @@ VALID_EVENTS = (
     "test",
 )
 
-USER_AGENT = "EduAuto-Webhooks/1.0"
+USER_AGENT = "AutoZap-Webhooks/1.0"
 _CLOUD_METADATA_IP = ipaddress.ip_address("169.254.169.254")
 
 

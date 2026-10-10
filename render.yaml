@@ -3,7 +3,7 @@
 # no painel do Render (Environment > Environment Variables).
 services:
   - type: web
-    name: meta-saas-platform
+    name: autozap
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt

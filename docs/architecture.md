@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-MetaBridge é uma plataforma SaaS multi-tenant que conecta ativos autorizados da Meta (inicialmente WhatsApp Cloud API) e os disponibiliza para clientes por meio de uma API própria, chaves internas, webhooks e painel administrativo.
+AutoZap é uma plataforma SaaS multi-tenant que conecta ativos autorizados da Meta (inicialmente WhatsApp Cloud API) e os disponibiliza para clientes por meio de uma API própria, chaves internas, webhooks e painel administrativo.
 
 ## Camadas
 

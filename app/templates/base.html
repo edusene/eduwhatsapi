@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}MetaBridge{% endblock %}</title>
+  <title>{% block title %}AutoZap{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+  <link rel="alternate icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   {% block extra_head %}{% endblock %}
 </head>
@@ -22,7 +24,9 @@
   <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu" aria-expanded="false">☰</button>
   <aside class="sidebar" id="sidebar" aria-label="Navegação principal">
     <div class="sidebar-brand">
-      <h1>MetaBridge</h1>
+      <a href="{{ url_for('dashboard.overview') }}" class="brand-link" aria-label="AutoZap">
+        <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="AutoZap" class="brand-logo" height="36">
+      </a>
     </div>
     <nav class="sidebar-nav">
       <a class="{% if request.endpoint == 'dashboard.overview' %}active{% endif %}" href="{{ url_for('dashboard.overview') }}">Visão geral</a>
@@ -46,8 +50,8 @@
   {% else %}
   <main class="auth-card">
     <div class="auth-logo">
-      <h1>MetaBridge</h1>
-      <p>Plataforma de APIs da Meta</p>
+      <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="AutoZap" class="auth-logo-img" height="48">
+      <p>Plataforma de APIs Oficiais da Meta</p>
     </div>
     {% block auth_content %}{% endblock %}
     <div class="form-links">
