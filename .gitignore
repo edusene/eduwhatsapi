@@ -1,0 +1,30 @@
+# Segredos e ambiente local — NUNCA versionar
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Build e logs
+build/
+dist/
+*.log
+logs/
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

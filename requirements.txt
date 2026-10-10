@@ -1,0 +1,16 @@
+# Dependências fixadas conforme testado com Python 3.12+ (verificado em 3.14).
+Flask==3.1.3
+Werkzeug==3.1.9
+supabase==2.32.0
+postgrest==2.32.0
+supabase-auth==2.32.0
+cryptography==50.0.2
+Flask-Limiter==4.1.1
+limits==5.8.0
+requests==2.34.2
+python-dotenv==1.2.4
+gunicorn==26.2.0
+# Desenvolvimento/testes
+pytest==9.1.1
+pytest-mock==3.16.0
+responses==0.26.3

@@ -1,0 +1,392 @@
+PROMPT PARA KIMI K3 — CONSTRUIR UMA PLATAFORMA SaaS DE APIs OFICIAIS DA META
+
+Você é um engenheiro de software sênior, arquiteto de SaaS multi-tenant e especialista em Python/Flask, Supabase, APIs oficiais da Meta, WhatsApp Cloud API, OAuth, webhooks e implantação no Render. Quero que você CONSTRUA O PROJETO COMPLETO, com código funcional, estrutura de arquivos, migrações SQL, documentação e instruções de deploy. Não quero apenas uma explicação ou exemplos isolados: crie todos os arquivos necessários no ambiente de trabalho disponível e implemente o MVP de ponta a ponta.
+
+## 1. VISÃO DO PRODUTO
+
+Crie uma plataforma SaaS própria, inspirada no modelo de infraestrutura de API de serviços como a Datafy API, mas com marca, código, interface e documentação originais. O objetivo é permitir que minha empresa conecte ativos autorizados às APIs oficiais da Meta e disponibilize recursos para vários clientes por meio de um painel e de uma API própria, com chaves internas por cliente, webhooks e gestão multiempresa.
+
+A prioridade inicial é a API oficial do WhatsApp Business Platform / WhatsApp Cloud API. Estruture a arquitetura para permitir adicionar Instagram Messaging API e Messenger Platform futuramente, mas NÃO invente recursos nem implemente integrações que não estejam disponíveis ou autorizadas para o app. Comece pelo WhatsApp e deixe os outros canais desacoplados por adaptadores.
+
+IMPORTANTE: ter acesso de desenvolvedor à Meta não significa automaticamente ter aprovação para todos os produtos, permissões, uso por terceiros ou status de Tech Provider/Partner. Implemente somente os fluxos e recursos compatíveis com as permissões efetivamente concedidas ao app. Não prometa que a plataforma é parceira oficial da Meta, não use selos ou marcas de parceria e não afirme aprovações que não tenham sido concedidas. Deixe a documentação clara sobre os requisitos de App Review, verificação empresarial, permissões avançadas e onboarding de clientes. Não tente contornar revisão, limites, políticas ou controles da Meta.
+
+## 2. STACK OBRIGATÓRIA
+
+- Backend: Python 3.12+ e Flask.
+- Frontend: HTML semântico, CSS responsivo e JavaScript; usar Jinja2 no servidor quando fizer sentido.
+- Banco e autenticação: Supabase (PostgreSQL + Supabase Auth).
+- Deploy: Render como Web Service, usando Gunicorn.
+- Segredos: variáveis de ambiente em `.env` local e Environment Variables do Render em produção.
+- Integração Meta: APIs oficiais HTTPS e Graph API, com versões e endpoints obtidos na documentação oficial atual.
+- Testes: pytest, mocks HTTP e testes de integração que não dependam de credenciais reais.
+- Dependências: `requirements.txt` com versões compatíveis e razoavelmente fixadas.
+- Repositório: preparado para Git/GitHub, sem credenciais ou dados sensíveis versionados.
+
+Use o MCP oficial de ferramentas para desenvolvedores da Meta, se estiver disponível no ambiente do Kimi:
+https://developers.facebook.com/documentation/mcp/devtools-mcp?utm_source=dfc_myapp
+
+Primeiro, consulte as instruções oficiais do MCP e conecte-o de acordo com a documentação disponível. Use-o para pesquisar documentação, verificar versões, permissões, endpoints e exemplos relevantes. Se o MCP não estiver disponível ou não puder ser conectado, prossiga consultando fontes oficiais acessíveis e registre essa limitação. Não finja que consultou o MCP. Não invente endpoints, permissões, parâmetros, escopos OAuth ou funcionalidades. Prefira documentação oficial da Meta e Supabase às fontes de terceiros.
+
+## 3. REGRAS DE EXECUÇÃO
+
+1. Inspecione o ambiente de trabalho e identifique como criar os arquivos. Depois, implemente o projeto real.
+2. Não pare depois de criar um plano. Execute a implementação.
+3. Se uma decisão não essencial estiver em aberto, escolha uma opção segura e documente-a, sem interromper o trabalho para perguntar.
+4. Não exija que eu forneça segredos agora. Crie `.env.example` com nomes de variáveis e valores fictícios/explicativos, e deixe os segredos reais para eu preencher depois.
+5. Não coloque tokens reais, senhas, chaves privadas ou credenciais nos arquivos, logs, commits ou respostas.
+6. Não deixe botões sem ação, endpoints fictícios apresentados como funcionais, funções vazias ou TODOs nas funcionalidades principais. Para recursos que dependam de aprovação/credenciais externas, implemente a estrutura e as mensagens de configuração necessárias e explique claramente o que ainda depende de configuração externa.
+7. Ao final, mostre a árvore do projeto, resuma o que foi implementado, os comandos para executar localmente, o SQL a executar no Supabase e os passos exatos de deploy no Render.
+8. Se não puder criar arquivos diretamente, forneça cada arquivo completo, com seu caminho, sem omitir partes com frases como “restante do código”.
+9. Use português brasileiro na interface e na documentação voltada ao administrador; nomes de código podem ser em inglês.
+10. Priorize segurança, isolamento entre clientes, simplicidade operacional e baixo custo de hospedagem.
+
+## 4. FUNCIONALIDADES DO MVP
+
+### 4.1 Autenticação e organizações
+- Cadastro, login, logout, recuperação de senha e confirmação de e-mail via Supabase Auth.
+- Páginas protegidas: dashboard, canais, credenciais, logs, webhooks e configurações.
+- Cada usuário pertence a uma organização/empresa (tenant).
+- Suportar organização individual no MVP e deixar estrutura preparada para convidar membros e definir papéis.
+- Papéis iniciais: `owner`, `admin`, `developer`, `viewer`.
+- Um usuário nunca pode ler, alterar ou usar dados, tokens, números, mensagens, logs ou chaves de outra organização.
+- Validar a sessão no backend. Não confiar apenas em verificações JavaScript ou em dados enviados pelo navegador.
+- Implementar autorização centralizada e checagem de organização em todas as operações.
+- Usar Supabase Row Level Security (RLS) nas tabelas com dados de clientes.
+- Nunca expor `SUPABASE_SERVICE_ROLE_KEY` ao frontend. Usar a chave `anon`/publishable no navegador apenas se necessária e apropriada; operações privilegiadas devem ocorrer no backend.
+- Não armazenar senha de usuário manualmente. Supabase Auth é responsável pela autenticação.
+
+### 4.2 Painel
+Crie uma interface moderna, limpa, profissional e responsiva, com:
+- Tela de login/cadastro.
+- Dashboard com resumo de canais conectados, números, uso de API e eventos recentes.
+- Página de canais/números conectados.
+- Página de chaves de API.
+- Página de webhooks de saída.
+- Página de logs de requisições e eventos.
+- Página de configurações e perfil.
+- Estados vazios úteis, mensagens de erro claras, feedback de carregamento e confirmações para ações destrutivas.
+- Navegação acessível, layout adaptado a desktop e celular.
+- Não exibir métricas falsas: quando não houver dados, mostrar zero ou estado vazio.
+- Nunca exibir tokens completos depois de sua criação. Mostrar apenas prefixo/sufixo ou máscara.
+
+### 4.3 Conexão oficial com a Meta
+Implemente a base para conectar ativos do WhatsApp Business Platform usando somente fluxos oficiais suportados pela Meta.
+
+- Preparar o fluxo OAuth/Embedded Signup oficial quando aplicável e disponível para o tipo de app e permissões aprovadas.
+- Não simular o Embedded Signup com uma tela falsa.
+- Não pedir a senha do Facebook do usuário.
+- Usar `state` criptograficamente seguro para proteção contra CSRF, validar redirect URI e validar a resposta OAuth no servidor.
+- Solicitar apenas escopos necessários e documentados. Não assumir que qualquer permissão será concedida.
+- Armazenar de forma segura os identificadores e tokens necessários, com criptografia no backend para tokens persistidos, quando aplicável.
+- Registrar dados mínimos necessários: identificador da WABA, identificador do número, nome/telefone exibido quando retornado, status de conexão, organização proprietária, timestamps e estado da autorização.
+- Não considerar uma conta conectada até que o servidor valide a resposta e consiga confirmar os dados pela API oficial.
+- Implementar ações de desconectar/revogar acesso e apagar dados associados quando aplicável.
+- Deixar as variáveis de configuração e URLs de callback documentadas.
+- Se a configuração externa do app, revisão, permissões ou Embedded Signup ainda não estiver pronta, exibir instruções claras no painel e documentar o que falta. O restante do sistema deve continuar funcionando em modo de desenvolvimento com mocks.
+
+### 4.4 API própria com chaves internas
+Crie uma REST API versionada, por exemplo `/api/v1/`, para que cada cliente use a plataforma a partir de n8n, Make, scripts Python ou outros sistemas.
+
+- Gerar chaves internas de API por organização e permitir criar, listar metadados, revogar e rotacionar.
+- Exibir o segredo completo somente uma vez, no momento da criação.
+- Guardar no banco somente hash seguro da chave, nunca a chave em texto puro. Usar um prefixo identificável, como `sk_live_` e `sk_test_`, sem sugerir que essas chaves são tokens oficiais da Meta.
+- Comparar hashes de forma segura e implementar revogação imediata.
+- Incluir ambientes de teste e produção se isso puder ser feito com clareza e sem complicar excessivamente o MVP.
+- Aplicar rate limit por chave/organização e limites configuráveis.
+- Validar autenticação, autorização, esquema de entrada e tamanho do corpo.
+- Retornar erros JSON consistentes, com código de erro, mensagem segura e identificador de requisição.
+- Criar documentação OpenAPI/Swagger da API própria.
+- Não expor tokens oficiais da Meta nem permitir que uma organização use IDs ou canais pertencentes a outra.
+- As chaves internas autorizam o uso do serviço; a chamada à Meta deve ser feita pelo backend com a credencial correta do ativo vinculado.
+
+### 4.5 Proxy/encaminhamento de chamadas oficiais
+Implemente uma camada de serviço para encaminhar chamadas permitidas à API oficial do WhatsApp Cloud API.
+
+- Começar com endpoints necessários ao MVP: consultar informações básicas de um número conectado, enviar mensagem de texto e consultar o resultado/estado retornado pela Meta quando suportado.
+- Use os endpoints, versão de Graph API, campos e formatos atuais confirmados na documentação oficial.
+- Enviar sempre os campos obrigatórios da Meta, inclusive `messaging_product` quando exigido.
+- Validar o destinatário, conteúdo, tipo de mensagem, ativo associado e autorização do cliente.
+- Respeitar janela de atendimento, modelos de mensagem aprovados, consentimento do destinatário, políticas e limites da Meta.
+- Não implementar spam, coleta de contatos, evasão de limites ou envio sem autorização.
+- Não apresentar “disparo em massa” irrestrito como funcionalidade. Se houver envio a múltiplos destinatários no futuro, deve ser uma fila controlada, com opt-in, templates aprovados quando exigidos, rate limits, auditoria e respeito às políticas.
+- Tratar timeouts, erros HTTP, respostas inválidas, limites de taxa e erros da Meta sem vazar tokens ou dados pessoais em logs.
+- Usar timeouts explícitos e retries limitados apenas quando seguros. Não repetir automaticamente uma mensagem que possa ser duplicada sem uma estratégia de idempotência.
+- Preservar o significado da resposta da Meta e mapear erros para respostas próprias sem esconder o erro original relevante.
+- Definir interface/adaptador para suportar outros canais no futuro, sem acoplar todo o código ao WhatsApp.
+
+### 4.6 Webhooks recebidos da Meta
+- Criar endpoint público para verificação do webhook usando o mecanismo oficial de challenge/verify token.
+- Validar o método, challenge e token de verificação conforme a documentação oficial.
+- Validar a assinatura `X-Hub-Signature-256` com HMAC-SHA256 sobre o corpo bruto da requisição e o App Secret, conforme especificação oficial. Comparar de forma constante no tempo.
+- Não processar eventos como confiáveis antes de validar a assinatura.
+- Tratar mensagens recebidas, status de envio/entrega/leitura/falha e outros eventos relevantes disponíveis para as permissões do app.
+- Validar o formato do payload, lidar com eventos desconhecidos e prevenir processamento duplicado com ID de evento/mensagem ou chave de idempotência apropriada.
+- Responder rapidamente à Meta com status adequado e transferir processamento pesado para mecanismo de fila simples e confiável quando necessário. Para o MVP no Render, se não houver Redis/fila externa configurada, implemente uma alternativa segura com registro no banco e processamento controlado, sem prometer processamento assíncrono que não exista.
+- Registrar eventos com retenção mínima necessária, sem armazenar conteúdo sensível desnecessariamente.
+- Documentar a configuração do webhook no painel de desenvolvedor da Meta e os campos/eventos que precisam ser assinados.
+
+### 4.7 Webhooks de saída para os clientes
+- Permitir cadastrar URLs HTTPS de webhook por organização.
+- Enviar eventos como `message.received`, `message.status.updated`, `channel.connected`, `channel.disconnected` e `api.request.failed` quando esses eventos existirem no sistema.
+- Assinar as entregas de saída com HMAC-SHA256 e incluir timestamp e identificador de entrega.
+- Implementar timeout, tentativas limitadas com backoff, registro do status e proteção contra repetição indefinida.
+- Validar URL e bloquear SSRF: rejeitar localhost, IPs privados, link-local, endereços de metadados de cloud e esquemas diferentes de HTTPS em produção; revalidar redirecionamentos/DNS quando aplicável. Não permitir que clientes usem o servidor como proxy para destinos internos.
+- Criar tela para testar webhook e visualizar histórico sem expor segredos.
+- Guardar o segredo de assinatura de forma segura e exibi-lo apenas na criação/rotação.
+
+### 4.8 Logs, auditoria e uso
+- Registrar chamadas de API com organização, chave identificada sem segredo, endpoint, status, latência, timestamp, request ID e erro sanitizado.
+- Não registrar `Authorization`, tokens da Meta, cookies, segredos, conteúdo completo de mensagens ou dados pessoais desnecessários.
+- Criar limites de retenção e instruções para limpeza periódica.
+- Dashboard com uso real calculado a partir dos registros; não inventar contagens.
+- Auditar criação/revogação de chaves, conexão/desconexão de canais e mudanças de webhook.
+- Incluir idempotência para operações sensíveis, especialmente envio de mensagens e processamento de webhooks.
+
+## 5. BANCO DE DADOS SUPABASE
+
+Crie um arquivo completo `supabase/schema.sql` com tabelas, chaves estrangeiras, índices, constraints, triggers necessárias, políticas RLS e comentários. Ajuste o esquema conforme a arquitetura real. Considere tabelas equivalentes a:
+
+- `organizations`: empresa/tenant, nome, slug, proprietário e timestamps.
+- `organization_members`: associação entre usuário Supabase Auth, organização e papel.
+- `meta_connections`: conexão autorizada, canal, IDs de ativos, estado e timestamps.
+- `api_keys`: organização, nome, prefixo, hash, ambiente, escopos, última utilização, expiração, revogação e timestamps.
+- `webhook_endpoints`: organização, URL, eventos assinados, segredo armazenado com segurança, status e timestamps.
+- `webhook_deliveries`: evento, endpoint, tentativas, resposta sanitizada, status, próximo retry e timestamps.
+- `webhook_events`: eventos recebidos da Meta, identificador de deduplicação, tipo, payload mínimo necessário e estado de processamento.
+- `api_request_logs`: métricas sanitizadas de requisições.
+- `audit_logs`: ações relevantes realizadas por usuários ou processos.
+- `usage_records`, se necessário, para agregar consumo.
+
+Requisitos de banco:
+- UUIDs e timestamps UTC.
+- Índices nas colunas consultadas frequentemente.
+- Integridade referencial e unicidade para impedir conexões/eventos duplicados.
+- RLS habilitada em todas as tabelas que contêm dados de tenants.
+- Políticas que garantam isolamento entre organizações.
+- Não confiar em `organization_id` enviado pelo navegador: validar associação do usuário no backend e nas políticas.
+- Operações administrativas com service role somente no backend, com autorização explícita.
+- Nunca colocar a service role key no cliente.
+- Incluir instruções claras sobre como executar o SQL no Supabase SQL Editor.
+- Se uma função SQL ou trigger exigir privilégios especiais, documente.
+- Não criar políticas RLS permissivas como `USING (true)` para dados privados.
+- Use migrations adicionais se necessário, mas inclua uma forma clara de instalar o esquema do zero.
+
+## 6. SEGURANÇA E PRIVACIDADE
+
+Implemente as medidas pertinentes, incluindo:
+- Configuração de cookies de sessão seguros quando aplicável: `HttpOnly`, `Secure` em produção e `SameSite`.
+- Proteção CSRF para formulários e operações baseadas em sessão.
+- CORS restrito às origens configuradas.
+- Proteção contra XSS, SQL injection e mass assignment; consultas parametrizadas/SDK oficial.
+- Validação de entradas com biblioteca apropriada.
+- Rate limiting em login sensível, criação de chaves, envio de mensagens e endpoints públicos.
+- Headers de segurança e limite de tamanho de requisições.
+- Segredos via variáveis de ambiente; nunca commitar `.env`.
+- Criptografia de tokens da Meta persistidos, com chave de criptografia dedicada e instruções de rotação. Não usar hash no lugar de criptografia para tokens que precisam ser recuperados.
+- Sanitização de logs e mensagens de erro.
+- Auditoria e estratégia para revogar tokens/chaves.
+- Verificação de assinatura em webhooks.
+- Prevenção contra SSRF nos webhooks de saída.
+- Política de retenção/exclusão de dados e mecanismo de desconexão.
+- Páginas/documentos iniciais de Termos de Uso e Política de Privacidade como modelos editáveis, não como aconselhamento jurídico nem textos finais garantidamente conformes.
+- Considerar LGPD: finalidade, minimização, transparência, retenção, exclusão e atendimento a solicitações dos titulares.
+- Não armazenar dados pessoais ou conteúdo de mensagens além do necessário ao funcionamento.
+- Não incluir PII ou segredos em URLs, logs ou mensagens de erro.
+
+## 7. VARIÁVEIS DE AMBIENTE
+
+Crie `.env.example` incluindo todas as variáveis necessárias, com valores demonstrativos claramente fictícios, pelo menos:
+- `FLASK_ENV`
+- `SECRET_KEY`
+- `APP_BASE_URL`
+- `DATABASE_URL` se realmente necessário
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY` ou publishable key, se usada
+- `SUPABASE_SERVICE_ROLE_KEY` (somente backend; nunca frontend)
+- `META_APP_ID`
+- `META_APP_SECRET`
+- `META_GRAPH_API_VERSION`
+- `META_REDIRECT_URI`
+- `META_WEBHOOK_VERIFY_TOKEN`
+- `META_WEBHOOK_APP_SECRET` ou referência documentada ao App Secret utilizado para assinatura
+- `TOKEN_ENCRYPTION_KEY`
+- `API_KEY_PEPPER` caso seja necessário para hash das chaves internas
+- `CORS_ORIGINS`
+- `RATE_LIMIT_STORAGE_URI` se a implementação exigir
+- `LOG_LEVEL`
+- `SESSION_COOKIE_SECURE`
+- variáveis de fila/retry apenas se realmente usadas.
+
+Use nomes consistentes em todo o código. Não use valores reais. Valide a configuração no startup e forneça mensagens claras quando variáveis obrigatórias estiverem ausentes. A aplicação deve conseguir subir em modo de desenvolvimento/teste com integrações externas desativadas, sem fingir que está conectada à Meta.
+
+Crie `.gitignore` para `.env`, ambientes virtuais, caches, arquivos de build, logs e segredos. Não crie um `.env` com credenciais reais.
+
+## 8. DEPLOY NO RENDER
+
+Prepare:
+- `requirements.txt`
+- `render.yaml` se adequado, sem incluir segredos.
+- comando de build e start, por exemplo instalação de dependências e Gunicorn, ajustado à estrutura real.
+- endpoint de health check, por exemplo `/health`, sem revelar detalhes sensíveis.
+- configuração de logs para stdout/stderr.
+- uso de variáveis de ambiente do Render.
+- instruções para configurar domínio e HTTPS, callback OAuth e webhook Meta com a URL pública.
+- observação de que o sistema de arquivos local do Render pode ser efêmero; dados persistentes devem ficar no Supabase.
+- configuração que não dependa de servidor de desenvolvimento Flask em produção.
+- instruções para executar migrations/schema no Supabase antes de testar a aplicação.
+
+## 9. TESTES E QUALIDADE
+
+Implemente testes pytest cobrindo pelo menos:
+- `/health`.
+- páginas públicas e protegidas.
+- autenticação/autorização e isolamento entre organizações.
+- criação, autenticação, revogação e rotação de API keys.
+- validação de parâmetros e respostas JSON de erro.
+- verificação do webhook Meta e assinatura inválida.
+- deduplicação de eventos.
+- assinatura HMAC de webhooks de saída.
+- bloqueio de URLs privadas/SSRF.
+- encaminhamento para a Meta usando mocks HTTP, incluindo erros e timeout.
+- configuração ausente e modo de desenvolvimento.
+- tentativas de acesso cruzado entre tenants.
+
+Não dependa de uma conta Meta real para a suíte padrão. Crie mocks claros e testes que possam ser executados localmente. Corrija os testes e problemas encontrados antes de concluir. Evite alegar que os testes passaram sem executá-los.
+
+## 10. DOCUMENTAÇÃO QUE DEVE SER ENTREGUE
+
+Crie um `README.md` completo em português com:
+- visão geral e arquitetura.
+- árvore de arquivos.
+- pré-requisitos.
+- instalação local no Windows e comandos de terminal.
+- criação do ambiente virtual e instalação de dependências.
+- cópia de `.env.example` para `.env`.
+- criação/configuração de projeto Supabase e execução de `supabase/schema.sql`.
+- configuração do app da Meta e dos produtos necessários.
+- permissões e revisões que podem ser necessárias, sem presumir aprovação.
+- configuração do OAuth/Embedded Signup e callbacks, se implementado.
+- configuração e verificação do webhook.
+- execução do Flask localmente.
+- execução dos testes.
+- deploy no Render passo a passo.
+- exemplos reais de formato de requisição para a API própria usando placeholders seguros.
+- exemplo de envio de mensagem de teste, deixando claro que requer um número/ativo autorizado e configuração válida.
+- como criar e revogar uma chave interna.
+- como assinar e validar os webhooks enviados aos clientes.
+- erros comuns e resolução de problemas.
+- checklist antes de produção.
+- custos e limites que dependem do Supabase, Render e cobrança/políticas da Meta, sem inventar valores.
+- lista clara do que exige configuração manual ou aprovação externa.
+
+Crie também:
+- `docs/architecture.md`
+- `docs/meta-setup.md`
+- `docs/api.md` ou especificação OpenAPI
+- `docs/security.md`
+- `docs/deployment-render.md`
+- exemplos de `curl` com placeholders, nunca tokens reais.
+- `LICENSE` apenas se fizer sentido; se não escolher uma licença, explique que os direitos/licenciamento ainda precisam ser definidos.
+
+## 11. ESTRUTURA DE CÓDIGO SUGERIDA
+
+Você pode ajustar a estrutura, mas mantenha separação clara de responsabilidades. Por exemplo:
+
+project/
+  app/
+    __init__.py
+    config.py
+    extensions.py
+    auth/
+    dashboard/
+    meta/
+      oauth.py
+      graph_api.py
+      whatsapp.py
+      webhooks.py
+    api/
+      routes.py
+      auth.py
+      schemas.py
+    services/
+      api_keys.py
+      encryption.py
+      organizations.py
+      outbound_webhooks.py
+      usage.py
+    repositories/
+    templates/
+    static/
+      css/
+      js/
+  supabase/
+    schema.sql
+  tests/
+  docs/
+  .env.example
+  .gitignore
+  requirements.txt
+  render.yaml
+  README.md
+  wsgi.py
+
+A estrutura é uma referência; implemente a que fizer mais sentido. Evite um único arquivo gigante.
+
+## 12. CONTRATO DE API E EXEMPLOS
+
+Defina endpoints documentados e consistentes. Inclua, conforme implementado, rotas semelhantes a:
+- `GET /health`
+- `GET /api/v1/me`
+- `GET /api/v1/channels`
+- `POST /api/v1/whatsapp/{phone_number_id}/messages`
+- `GET /api/v1/usage`
+- endpoints de gestão de chaves, webhooks e conexões protegidos por sessão e autorização.
+- endpoint público de webhook da Meta, com nome/caminho documentado.
+- endpoint de callback OAuth.
+
+Não trate a lista acima como prova de que qualquer endpoint Meta específico é válido: esses são endpoints da MINHA aplicação. Os endpoints externos da Meta, parâmetros e versões devem ser conferidos na documentação oficial atual.
+
+Para enviar uma mensagem, documente um formato JSON apropriado ao endpoint próprio, por exemplo:
+{
+  "to": "55DDDNUMERO",
+  "type": "text",
+  "text": {
+    "body": "Mensagem de teste"
+  }
+}
+
+Ajuste o payload no adaptador para o formato oficial exigido pela versão atual da Cloud API. Responda com JSON consistente e sem expor token da Meta. Inclua cabeçalho de autenticação com chave interna fictícia apenas como placeholder, por exemplo `Authorization: Bearer sk_test_SUBSTITUA_PELA_SUA_CHAVE`.
+
+## 13. CRITÉRIOS DE ACEITAÇÃO
+
+O projeto só está concluído quando:
+- todos os arquivos essenciais foram criados;
+- a aplicação Flask importa e inicia em modo de desenvolvimento/teste;
+- existe uma interface de autenticação e dashboard com estados reais;
+- há SQL de instalação do Supabase e RLS para isolamento de tenants;
+- há sistema funcional de API keys internas com armazenamento por hash;
+- a API própria valida chaves, organização, limites e entradas;
+- existe adaptador de WhatsApp com mocks e chamadas oficiais configuráveis;
+- os webhooks de entrada verificam challenge e assinatura corretamente;
+- webhooks de saída possuem assinatura, tentativas e proteção SSRF;
+- existe health check e configuração para Render/Gunicorn;
+- testes e documentação foram criados;
+- não há segredos reais, endpoints inventados apresentados como oficiais ou afirmações falsas de parceria/aprovação;
+- as limitações que dependem de configuração externa estão descritas claramente.
+
+## 14. FORMA DE TRABALHO E RESPOSTA FINAL
+
+Trabalhe em etapas internas, mas execute todas:
+A. Consultar documentação oficial e MCP quando disponível.
+B. Definir arquitetura.
+C. Criar arquivos e banco.
+D. Implementar autenticação, tenants, API keys, adaptador Meta e webhooks.
+E. Construir o frontend.
+F. Criar documentação e testes.
+G. Executar os testes disponíveis e corrigir os erros encontrados.
+H. Revisar segurança, dependências e consistência de variáveis.
+I. Entregar um resumo com árvore de arquivos, comandos de instalação, variáveis que preciso preencher, SQL do Supabase, instruções de Render e lista de configurações externas pendentes.
+
+Não responda apenas com recomendações, pseudocódigo ou um tutorial. Construa o máximo possível do projeto no ambiente disponível. Se uma função depender de aprovação externa da Meta, implemente a estrutura segura e explique exatamente o que falta para ativá-la, sem simular sucesso.
+
+Comece agora pela inspeção do ambiente e pela documentação oficial da Meta/Supabase; em seguida, crie e teste o projeto completo.

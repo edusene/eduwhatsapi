@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Visão geral — MetaBridge{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Visão geral</h1></div>
+<div class="grid grid-3">
+  <div class="card"><div class="card-title">Canais ativos</div><div class="card-value">{{ active_conns }}</div></div>
+  <div class="card"><div class="card-title">Chaves ativas</div><div class="card-value">{{ active_keys }}</div></div>
+  <div class="card"><div class="card-title">Requisições 24h</div><div class="card-value">{{ logs_24h }}</div></div>
+</div>
+<h2>Eventos recentes</h2>
+{% if recent_events %}
+<table>
+  <thead><tr><th>Horário</th><th>Evento</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for ev in recent_events %}
+    <tr><td>{{ ev.received_at }}</td><td>{{ ev.event_type }}</td><td><span class="badge badge-{{ ev.status }}">{{ ev.status }}</span></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">Nenhum evento recente.</p>
+{% endif %}
+{% endblock %}

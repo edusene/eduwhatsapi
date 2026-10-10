@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Webhook criado — MetaBridge{% endblock %}
+{% block content %}
+<div class="centered-card secret-card">
+  <h1>Webhook criado</h1>
+  <div class="alert alert-warning">
+    Copie o segredo de assinatura agora. Você não poderá vê-lo novamente.
+  </div>
+  <div class="secret-box">
+    <code id="secret">{{ endpoint.secret }}</code>
+    <button type="button" class="btn btn-sm" data-clipboard-target="#secret">Copiar</button>
+  </div>
+  <p><strong>URL:</strong> {{ endpoint.url }}<br><strong>Eventos:</strong> {{ endpoint.events | join(", ") }}</p>
+  <a class="btn btn-primary" href="{{ url_for('dashboard.webhooks') }}">Concluir</a>
+</div>
+{% endblock %}

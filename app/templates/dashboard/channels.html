@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Canais — MetaBridge{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Canais conectados</h1></div>
+{% if not meta_oauth_configured %}
+<div class="alert alert-info">
+  OAuth da Meta não configurado. Defina <code>META_APP_ID</code>, <code>META_APP_SECRET</code> e <code>META_REDIRECT_URI</code> no ambiente para ativar a conexão automática.
+</div>
+{% endif %}
+<div class="actions">
+  <a class="btn btn-primary {% if not meta_oauth_configured %}disabled{% endif %}"
+     href="{{ url_for('meta_oauth.start') }}">Conectar com a Meta</a>
+</div>
+<h2>Conexão manual (desenvolvimento)</h2>
+<form method="post" action="{{ url_for('meta_oauth.manual') }}" class="form-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Token de acesso (sistema)</label>
+  <input type="password" name="access_token" required placeholder="EAA..." style="min-width:300px">
+  <label>WABA ID</label>
+  <input type="text" name="waba_id" required placeholder="123456789012345">
+  <label>Phone Number ID</label>
+  <input type="text" name="phone_number_id" required placeholder="123456789012345">
+  <button type="submit" class="btn btn-secondary">Validar e salvar</button>
+</form>
+<h2>Conexões salvas</h2>
+{% if channels %}
+<table>
+  <thead><tr><th>Canal</th><th>Número</th><th>Status</th><th>Ações</th></tr></thead>
+  <tbody>
+    {% for c in channels %}
+    <tr>
+      <td>{{ c.channel }}</td>
+      <td>{{ c.display_phone_number or c.phone_number_id }}</td>
+      <td><span class="badge badge-{{ c.status }}">{{ c.status }}</span></td>
+      <td class="actions-cell">
+        <form method="post" action="{{ url_for('meta_oauth.validate', connection_id=c.id) }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm">Revalidar</button>
+        </form>
+        <form method="post" action="{{ url_for('meta_oauth.disconnect', connection_id=c.id) }}" style="display:inline"
+              data-confirm="Desconectar este canal? O token será removido.">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-danger">Desconectar</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">Nenhum canal conectado.</p>
+{% endif %}
+{% endblock %}

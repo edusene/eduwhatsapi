@@ -1,0 +1,56 @@
+# Blueprint do Render — provisiona o Web Service. Sem segredos aqui:
+# as variáveis sensíveis são marcadas com sync: false e devem ser definidas
+# no painel do Render (Environment > Environment Variables).
+services:
+  - type: web
+    name: meta-saas-platform
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --workers 2 --threads 4 --timeout 60 --access-logfile - --error-logfile -
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12.11"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: APP_BASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_GRAPH_API_VERSION
+        value: v26.0
+      - key: META_REDIRECT_URI
+        sync: false
+      - key: META_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: META_WEBHOOK_APP_SECRET
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: API_KEY_PEPPER
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: RATE_LIMIT_STORAGE_URI
+        value: memory://
+      - key: OUTBOUND_WEBHOOK_TIMEOUT
+        value: "10"
+      - key: OUTBOUND_WEBHOOK_MAX_ATTEMPTS
+        value: "5"
+      - key: OUTBOUND_WEBHOOK_ALLOW_INSECURE
+        value: "false"

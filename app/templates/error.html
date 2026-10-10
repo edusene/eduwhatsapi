@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Erro {{ status }} — MetaBridge{% endblock %}
+{% block content %}
+<div class="centered-card">
+  <h1>Erro {{ status }}</h1>
+  <p>{{ message }}</p>
+  <a class="btn btn-primary" href="{{ url_for('dashboard.overview') if current_user else url_for('auth.login') }}">Voltar</a>
+</div>
+{% endblock %}

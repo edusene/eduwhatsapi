@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Logs — MetaBridge{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Logs</h1></div>
+<h2>Requisições de API</h2>
+{% if api_logs %}
+<table>
+  <thead><tr><th>Horário</th><th>Método</th><th>Endpoint</th><th>Status</th><th>Latência</th><th>Request ID</th></tr></thead>
+  <tbody>
+    {% for r in api_logs %}
+    <tr><td>{{ r.created_at }}</td><td>{{ r.method }}</td><td>{{ r.endpoint }}</td>
+    <td>{{ r.status_code }}</td><td>{{ r.latency_ms or "—" }} ms</td><td><code>{{ r.request_id }}</code></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">Nenhuma requisição nos últimos registros.</p>
+{% endif %}
+<h2>Eventos de webhook</h2>
+{% if webhook_events %}
+<table>
+  <thead><tr><th>Horário</th><th>Evento</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for e in webhook_events %}
+    <tr><td>{{ e.received_at }}</td><td>{{ e.event_type }}</td><td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">Nenhum evento recebido.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Chaves de API — MetaBridge{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Chaves de API</h1></div>
+{% if membership.role in ('owner','admin') %}
+<form method="post" action="{{ url_for('dashboard.api_keys_create') }}" class="form-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Nome</label>
+  <input type="text" name="name" required maxlength="80" placeholder="Ex.: Integração n8n">
+  <label>Ambiente</label>
+  <select name="environment"><option value="test">Teste</option><option value="live">Produção</option></select>
+  <button type="submit" class="btn btn-primary">Criar chave</button>
+</form>
+{% endif %}
+{% if keys %}
+<table>
+  <thead><tr><th>Nome</th><th>Prefixo</th><th>Ambiente</th><th>Escopos</th><th>Último uso</th><th>Ações</th></tr></thead>
+  <tbody>
+    {% for k in keys %}
+    <tr class="{% if k.revoked %}muted{% endif %}">
+      <td>{{ k.name }}</td>
+      <td><code>{{ k.key_hint }}</code></td>
+      <td><span class="badge badge-{{ k.environment }}">{{ k.environment }}</span></td>
+      <td>{{ k.scopes | join(", ") }}</td>
+      <td>{{ k.last_used_at or "—" }}</td>
+      <td class="actions-cell">
+        {% if not k.revoked and membership.role in ('owner','admin') %}
+        <form method="post" action="{{ url_for('dashboard.api_keys_rotate', key_id=k.id) }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm" data-confirm="Rotacionar esta chave? A atual será revogada.">Rotacionar</button>
+        </form>
+        <form method="post" action="{{ url_for('dashboard.api_keys_revoke', key_id=k.id) }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-danger" data-confirm="Revogar esta chave? A ação não pode ser desfeita.">Revogar</button>
+        </form>
+        {% else %}
+        <span class="badge badge-revoked">Revogada</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">Nenhuma chave criada.</p>
+{% endif %}
+{% endblock %}

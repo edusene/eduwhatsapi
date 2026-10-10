@@ -1,0 +1,355 @@
+openapi: 3.0.3
+info:
+  title: EduAuto — API Pública
+  version: 1.0.0
+  description: >-
+    API pública da plataforma EduAuto para envio de mensagens via WhatsApp
+    Cloud API (Meta) e consulta de canais e uso. A autenticação usa chaves
+    internas da plataforma (sk_test_/sk_live_), que NÃO são tokens da Meta —
+    os tokens da Meta ficam criptografados no servidor.
+  contact:
+    name: Suporte EduAuto
+servers:
+  - url: https://SUA-URL.onrender.com/api/v1
+    description: Produção (Render)
+  - url: http://localhost:5000/api/v1
+    description: Desenvolvimento local
+tags:
+  - name: Conta
+    description: Informações da chave e da organização
+  - name: Canais
+    description: Canais Meta conectados (WhatsApp)
+  - name: Mensagens
+    description: Envio de mensagens WhatsApp
+  - name: Uso
+    description: Métricas de uso da API
+paths:
+  /me:
+    get:
+      tags: [Conta]
+      summary: Identidade da chave de API
+      description: Retorna a organização, o ambiente e os escopos da chave usada na requisição.
+      operationId: getMe
+      responses:
+        "200":
+          description: Chave válida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organization_id:
+                    type: string
+                    format: uuid
+                  key_id:
+                    type: string
+                    format: uuid
+                  environment:
+                    type: string
+                    enum: [test, live]
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  request_id:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /channels:
+    get:
+      tags: [Canais]
+      summary: Lista canais conectados
+      description: >-
+        Lista as conexões Meta da organização (somente campos seguros — nunca
+        tokens). Escopo necessário: channels:read.
+      operationId: listChannels
+      responses:
+        "200":
+          description: Lista de canais.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Channel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /whatsapp/{phone_number_id}/messages:
+    post:
+      tags: [Mensagens]
+      summary: Envia mensagem de texto WhatsApp
+      description: >-
+        Envia uma mensagem de texto pelo número conectado, fazendo proxy para a
+        WhatsApp Cloud API oficial. Escopo necessário: messages:send.
+
+        Idempotência: envie o header `Idempotency-Key` (8 a 128 caracteres)
+        para que retries com a mesma chave retornem a resposta original sem
+        reenviar a mensagem (header `X-Idempotent-Replay: true` na resposta).
+      operationId: sendWhatsappMessage
+      parameters:
+        - name: phone_number_id
+          in: path
+          required: true
+          description: ID numérico do número na Meta (5 a 25 dígitos).
+          schema:
+            type: string
+            pattern: '^\d{5,25}$'
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Chave de idempotência opcional (8 a 128 caracteres).
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+            example:
+              to: "5511999998888"
+              type: text
+              text:
+                body: Olá! Sua matrícula foi confirmada.
+      responses:
+        "200":
+          description: Mensagem aceita pela Meta.
+          headers:
+            X-Idempotent-Replay:
+              description: Presente e igual a "true" quando a resposta veio da idempotência.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MetaSendMessageResponse"
+                  request_id:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Nenhum canal ativo da organização para o número informado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: channel_not_found
+                  message: Nenhum canal ativo encontrado para este número.
+                  request_id: "9f2c..."
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          description: Credencial do canal indisponível no servidor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: A Meta recusou a operação.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: Tempo esgotado aguardando a Meta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /usage:
+    get:
+      tags: [Uso]
+      summary: Métricas de uso da API
+      description: >-
+        Totais calculados sobre as 1000 requisições mais recentes da
+        organização. Escopo necessário: usage:read.
+      operationId: getUsage
+      responses:
+        "200":
+          description: Métricas agregadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      total_requests:
+                        type: integer
+                      last_24h:
+                        type: integer
+                      by_endpoint:
+                        type: object
+                        additionalProperties:
+                          type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /openapi.yaml:
+    get:
+      tags: [Conta]
+      summary: Esta especificação OpenAPI
+      description: Documento OpenAPI da API (acesso público, sem autenticação).
+      operationId: getOpenapiSpec
+      security: []
+      responses:
+        "200":
+          description: Especificação em YAML.
+          content:
+            application/yaml:
+              schema:
+                type: string
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: >-
+        Chave interna da plataforma no formato sk_test_... ou sk_live_...,
+        criada no painel da EduAuto. NÃO é um token da Meta — os tokens da
+        Meta nunca saem do servidor.
+  schemas:
+    Channel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum: [whatsapp]
+        phone_number_id:
+          type: string
+        display_phone_number:
+          type: string
+        verified_name:
+          type: string
+        status:
+          type: string
+          enum: [pending, active, error, disconnected]
+        connected_at:
+          type: string
+          format: date-time
+    SendMessageRequest:
+      type: object
+      required: [to, type, text]
+      properties:
+        to:
+          type: string
+          pattern: '^\+?\d{8,15}$'
+          description: Destinatário com código do país e DDD, só dígitos ("+" inicial opcional).
+        type:
+          type: string
+          enum: [text]
+          description: No MVP apenas mensagens de texto são suportadas.
+        text:
+          type: object
+          required: [body]
+          properties:
+            body:
+              type: string
+              minLength: 1
+              maxLength: 4096
+    MetaSendMessageResponse:
+      type: object
+      description: Resposta oficial da WhatsApp Cloud API.
+      properties:
+        messaging_product:
+          type: string
+          example: whatsapp
+        contacts:
+          type: array
+          items:
+            type: object
+            properties:
+              input:
+                type: string
+              wa_id:
+                type: string
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: wamid da mensagem enviada.
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+          required: [code, message, request_id]
+  responses:
+    BadRequest:
+      description: Requisição inválida (JSON malformado ou campos inválidos).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: invalid_recipient
+              message: "Destinatário inválido: use apenas dígitos (8 a 15), incluindo código do país e DDD."
+              request_id: "9f2c..."
+    Unauthorized:
+      description: Chave de API ausente ou inválida.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: invalid_api_key
+              message: Chave de API inválida ou revogada.
+              request_id: "9f2c..."
+    Forbidden:
+      description: A chave não tem o escopo necessário.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: insufficient_scope
+              message: A chave não tem o escopo necessário para esta operação.
+              request_id: "9f2c..."
+    RateLimited:
+      description: Limite de requisições excedido (60/min por chave).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+security:
+  - ApiKeyAuth: []
