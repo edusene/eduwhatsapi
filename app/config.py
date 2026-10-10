@@ -83,6 +83,10 @@ class Config:
     OUTBOUND_WEBHOOK_MAX_ATTEMPTS = _int("OUTBOUND_WEBHOOK_MAX_ATTEMPTS", 5)
     OUTBOUND_WEBHOOK_ALLOW_INSECURE = _bool("OUTBOUND_WEBHOOK_ALLOW_INSECURE", False)
 
+    # URLs de páginas legais (usadas no painel e para cadastro na Meta)
+    LEGAL_TERMS_URL = os.environ.get("LEGAL_TERMS_URL", "").strip() or f"{APP_BASE_URL}/termos"
+    LEGAL_PRIVACY_URL = os.environ.get("LEGAL_PRIVACY_URL", "").strip() or f"{APP_BASE_URL}/privacidade"
+
     @property
     def is_production(self) -> bool:
         return self.FLASK_ENV == "production"

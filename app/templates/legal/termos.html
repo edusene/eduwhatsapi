@@ -1,15 +1,82 @@
 {% extends "base.html" %}
-{% block title %}Termos de Uso — AutoZap{% endblock %}
+{% block title %}Termos de Serviço — AutoZap{% endblock %}
 {% block auth_content %}
-<div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
-<h2 class="auth-title">Termos de Uso</h2>
-<div style="font-size:0.9rem; color:var(--fg-muted); line-height:1.7;">
-  <p><strong>1. Objeto</strong><br>Estes Termos regem o uso da plataforma AutoZap, que permite o envio e recebimento de mensagens através das APIs oficiais da Meta, incluindo a WhatsApp Cloud API.</p>
-  <p style="margin-top:12px;"><strong>2. Responsabilidades</strong><br>Você se compromete a não utilizar a plataforma para envio de spam, mensagens não solicitadas, ou para fins que violem as políticas da Meta ou a legislação brasileira.</p>
-  <p style="margin-top:12px;"><strong>3. Proibições</strong><br>É proibido: (a) tentar burlar limites ou controles da Meta; (b) usar a plataforma sem as permissões necessárias; (c) compartilhar credenciais indevidamente.</p>
-  <p style="margin-top:12px;"><strong>4. Limitação de responsabilidade</strong><br>A plataforma é fornecida "como está". Não nos responsabilizamos por indisponibilidade de serviços da Meta.</p>
-</div>
-<div class="form-links">
-  <a href="{{ url_for('auth.login') }}">Voltar ao login</a>
+<div class="legal-page">
+  <div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
+
+  <h2 class="auth-title">Termos de Serviço</h2>
+  <p class="legal-updated">Última atualização: {{ now.strftime('%d/%m/%Y') if now else '10/10/2026' }}</p>
+
+  <div class="legal-content">
+    <section>
+      <h3>1. Aceitação dos Termos</h3>
+      <p>Ao acessar ou usar a plataforma <strong>AutoZap</strong>, você concorda com estes Termos de Serviço. Se não concordar, não utilize a plataforma.</p>
+    </section>
+
+    <section>
+      <h3>2. Descrição do Serviço</h3>
+      <p>A AutoZap é uma plataforma SaaS multi-tenant que permite conectar ativos autorizados da Meta (inicialmente WhatsApp Business Platform / WhatsApp Cloud API) e disponibilizar recursos para clientes por meio de uma API própria, chaves internas, webhooks e painel administrativo.</p>
+      <p>A AutoZap <strong>não é produto oficial da Meta</strong>, não é parceira certificada e não garante aprovação de permissões, App Review ou disponibilidade dos serviços da Meta.</p>
+    </section>
+
+    <section>
+      <h3>3. Cadastro e Conta</h3>
+      <p>Para usar a plataforma, você deve criar uma conta com dados verdadeiros. Você é responsável por manter a confidencialidade de suas credenciais e por todas as atividades realizadas em sua conta.</p>
+    </section>
+
+    <section>
+      <h3>4. Uso Permitido</h3>
+      <p>Você se compromete a usar a AutoZap apenas para fins lícitos e em conformidade com:</p>
+      <ul>
+        <li>as políticas da Meta para desenvolvedores e da WhatsApp Business Platform;</li>
+        <li>a legislação brasileira, incluindo a Lei Geral de Proteção de Dados (LGPD);</li>
+        <li>as diretrizes de consentimento e opt-in dos destinatários de mensagens.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>5. Proibições</h3>
+      <p>É expressamente proibido:</p>
+      <ul>
+        <li>enviar spam, mensagens não solicitadas ou em massa sem consentimento prévio;</li>
+        <li>tentar burlar limites, controles, revisões ou políticas da Meta;</li>
+        <li>usar a plataforma sem as permissões e aprovações necessárias;</li>
+        <li>compartilhar credenciais, chaves de API ou tokens da Meta indevidamente;</li>
+        <li>usar a plataforma para atividades fraudulentas, abusivas ou ilegais.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>6. Responsabilidades do Cliente</h3>
+      <p>O cliente é responsável por:</p>
+      <ul>
+        <li>obter e manter as permissões necessárias da Meta;</li>
+        <li>garantir que os destinatários consentiram em receber mensagens;</li>
+        <li>manter modelos de mensagem aprovados quando exigidos pela Meta;</li>
+        <li>respeitar as janelas de atendimento e limites de throughput.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>7. Limitação de Responsabilidade</h3>
+      <p>A plataforma é fornecida "como está". A AutoZap não se responsabiliza por indisponibilidade, mudanças ou recusas nos serviços da Meta, nem por decisões de App Review, verificação empresarial ou suspensão de contas.</p>
+    </section>
+
+    <section>
+      <h3>8. Modificações</h3>
+      <p>Podemos atualizar estes Termos periodicamente. Alterações significativas serão comunicadas por e-mail ou no painel da plataforma.</p>
+    </section>
+
+    <section>
+      <h3>9. Contato</h3>
+      <p>Dúvidas sobre estes Termos podem ser enviadas para: <a href="mailto:suporte@autozap.io">suporte@autozap.io</a>.</p>
+    </section>
+  </div>
+
+  <div class="form-links">
+    <a href="{{ url_for('auth.login') }}">Voltar ao login</a>
+    <span class="divider">•</span>
+    <a href="{{ url_for('auth.privacidade') }}">Política de Privacidade</a>
+  </div>
 </div>
 {% endblock %}

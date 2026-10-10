@@ -1,15 +1,96 @@
 {% extends "base.html" %}
 {% block title %}Política de Privacidade — AutoZap{% endblock %}
 {% block auth_content %}
-<div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
-<h2 class="auth-title">Política de Privacidade</h2>
-<div style="font-size:0.9rem; color:var(--fg-muted); line-height:1.7;">
-  <p><strong>1. Dados coletados</strong><br>Coletamos e-mail, identificadores da Meta, logs de requisições sanitizados e dados de uso. Não armazenamos conteúdo completo de mensagens.</p>
-  <p style="margin-top:12px;"><strong>2. Finalidade</strong><br>Os dados são usados para operar a plataforma, autenticar usuários, auditar uso e entregar eventos de webhook.</p>
-  <p style="margin-top:12px;"><strong>3. LGPD</strong><br>Você pode exercer seus direitos de titular (acesso, correção, exclusão) pelo e-mail: privacidade@seudominio.com.br.</p>
-  <p style="margin-top:12px;"><strong>4. Segurança</strong><br>Tokens da Meta são criptografados. Chaves internas são armazenadas apenas como hash.</p>
-</div>
-<div class="form-links">
-  <a href="{{ url_for('auth.login') }}">Voltar ao login</a>
+<div class="legal-page">
+  <div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
+
+  <h2 class="auth-title">Política de Privacidade</h2>
+  <p class="legal-updated">Última atualização: {{ now.strftime('%d/%m/%Y') if now else '10/10/2026' }}</p>
+
+  <div class="legal-content">
+    <section>
+      <h3>1. Introdução</h3>
+      <p>A <strong>AutoZap</strong> leva a sério a privacidade dos dados. Esta Política explica como coletamos, usamos, armazenamos e protegemos as informações no uso da plataforma.</p>
+    </section>
+
+    <section>
+      <h3>2. Dados Coletados</h3>
+      <p>Coletamos os seguintes tipos de dados:</p>
+      <ul>
+        <li><strong>Dados da conta:</strong> e-mail, identificador do usuário e organização, papéis e permissões.</li>
+        <li><strong>Dados de conexão:</strong> identificadores de ativos da Meta (WABA ID, phone_number_id), nome exibido e status da conexão.</li>
+        <li><strong>Tokens da Meta:</strong> armazenados de forma criptografada e usados apenas para encaminhar chamadas oficiais.</li>
+        <li><strong>Chaves internas de API:</strong> armazenadas apenas como hash; o segredo completo não é guardado.</li>
+        <li><strong>Logs de requisições:</strong> organização, chave identificada (sem segredo), endpoint, status, latência, timestamp e erros sanitizados.</li>
+        <li><strong>Eventos de webhook:</strong> identificadores de deduplicação, tipo de evento e payload mínimo necessário ao processamento.</li>
+      </ul>
+      <p><strong>Não armazenamos o conteúdo completo de mensagens</strong> trocadas entre você e seus destinatários, salvo quando estritamente necessário para entrega de eventos.</p>
+    </section>
+
+    <section>
+      <h3>3. Finalidade do Tratamento</h3>
+      <p>Os dados são usados para:</p>
+      <ul>
+        <li>autenticar usuários e gerenciar organizações;</li>
+        <li>operar a plataforma e encaminhar chamadas às APIs oficiais da Meta;</li>
+        <li>auditar uso, gerenciar chaves e canais;</li>
+        <li>entregar eventos de webhook aos clientes;</li>
+        <li>garantir segurança, prevenir fraudes e cumprir obrigações legais.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>4. Base Legal (LGPD)</h3>
+      <p>O tratamento de dados pessoais é realizado com base no cumprimento do contrato, no legítimo interesse, na obtenção de consentimento quando necessário e no cumprimento de obrigações legais.</p>
+    </section>
+
+    <section>
+      <h3>5. Segurança</h3>
+      <p>Adotamos medidas técnicas e administrativas para proteger os dados:</p>
+      <ul>
+        <li>Tokens da Meta são criptografados em repouso com Fernet.</li>
+        <li>Chaves internas são armazenadas apenas como hash HMAC-SHA256 com pepper.</li>
+        <li>Comunicação via HTTPS em produção.</li>
+        <li>Isolamento entre organizações no banco com Row Level Security (RLS).</li>
+        <li>Cookies de sessão com HttpOnly, Secure e SameSite.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>6. Compartilhamento de Dados</h3>
+      <p>Não vendemos dados pessoais. Compartilhamos dados apenas quando necessário para operação (ex.: encaminhamento à Meta) ou quando exigido por lei.</p>
+    </section>
+
+    <section>
+      <h3>7. Retenção e Exclusão</h3>
+      <p>Mantemos os dados pelo tempo necessário para operação, auditoria e cumprimento legal. Logs e eventos antigos podem ser removidos periodicamente conforme política de retenção. Você pode solicitar a exclusão de dados ao encerrar a conta, salvo quando houver obrigação legal de retenção.</p>
+    </section>
+
+    <section>
+      <h3>8. Direitos do Titular</h3>
+      <p>De acordo com a LGPD, você tem direito a acessar, corrigir, atualizar, anonimizar, bloquear ou eliminar seus dados pessoais. Para exercer esses direitos, envie um e-mail para: <a href="mailto:privacidade@autozap.io">privacidade@autozap.io</a>.</p>
+    </section>
+
+    <section>
+      <h3>9. Cookies e Tecnologias Semelhantes</h3>
+      <p>Usamos cookies essenciais para autenticação e segurança (CSRF). Não utilizamos cookies de rastreamento publicitário.</p>
+    </section>
+
+    <section>
+      <h3>10. Alterações nesta Política</h3>
+      <p>Podemos atualizar esta Política de Privacidade. A data da última atualização será indicada no topo desta página.</p>
+    </section>
+
+    <section>
+      <h3>11. Contato</h3>
+      <p>Encarregado de Dados (DPO): <a href="mailto:privacidade@autozap.io">privacidade@autozap.io</a>.</p>
+    </section>
+  </div>
+
+  <div class="form-links">
+    <a href="{{ url_for('auth.login') }}">Voltar ao login</a>
+    <span class="divider">•</span>
+    <a href="{{ url_for('auth.termos') }}">Termos de Serviço</a>
+  </div>
 </div>
 {% endblock %}

@@ -114,6 +114,9 @@ def _register_hooks(app: Flask) -> None:
             "membership": g.get("membership"),
             "meta_oauth_configured": cfg.meta_oauth_configured,
             "app_base_url": app.config["APP_BASE_URL"],
+            "legal_terms_url": app.config["LEGAL_TERMS_URL"],
+            "legal_privacy_url": app.config["LEGAL_PRIVACY_URL"],
+            "now": __import__("datetime").datetime.now(__import__("datetime").timezone.utc),
         }
 
 
