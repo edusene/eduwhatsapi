@@ -1,20 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Criar conta — MetaBridge{% endblock %}
-{% block content %}
-<div class="centered-card">
-  <h1>Criar conta</h1>
-  <form method="post" action="{{ url_for('auth.register') }}" class="form">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% block auth_content %}
+<h2 class="auth-title">Criar sua conta</h2>
+<form method="post" action="{{ url_for('auth.register') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-group">
     <label for="email">E-mail</label>
-    <input type="email" id="email" name="email" required autocomplete="email" autofocus>
-    <label for="password">Senha (mín. 10 caracteres)</label>
-    <input type="password" id="password" name="password" required autocomplete="new-password" minlength="10">
+    <input type="email" id="email" name="email" required autocomplete="email" autofocus placeholder="seu@email.com">
+  </div>
+  <div class="form-group">
+    <label for="password">Senha</label>
+    <input type="password" id="password" name="password" required autocomplete="new-password" minlength="10" placeholder="Mínimo 10 caracteres">
+  </div>
+  <div class="form-group">
     <label for="org_name">Nome da organização</label>
-    <input type="text" id="org_name" name="org_name" required maxlength="120">
-    <button type="submit" class="btn btn-primary">Criar conta</button>
-    <div class="form-links">
-      <a href="{{ url_for('auth.login') }}">Já tem uma conta? Entrar</a>
-    </div>
-  </form>
+    <input type="text" id="org_name" name="org_name" required maxlength="120" placeholder="Sua empresa">
+  </div>
+  <button type="submit" class="btn btn-primary btn-block">Criar conta</button>
+</form>
+<div class="form-links">
+  <a href="{{ url_for('auth.login') }}">Já tem uma conta? Entrar</a>
 </div>
 {% endblock %}

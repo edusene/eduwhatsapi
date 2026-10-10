@@ -1,9 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Erro {{ status }} — MetaBridge{% endblock %}
+{% if current_user %}
 {% block content %}
-<div class="centered-card">
-  <h1>Erro {{ status }}</h1>
-  <p>{{ message }}</p>
-  <a class="btn btn-primary" href="{{ url_for('dashboard.overview') if current_user else url_for('auth.login') }}">Voltar</a>
+<div style="text-align:center; padding:60px 20px;">
+  <h1 style="font-size:3rem; font-weight:700; color:var(--danger); margin-bottom:8px;">{{ status }}</h1>
+  <p style="color:var(--fg-muted); margin-bottom:24px;">{{ message }}</p>
+  <a class="btn btn-primary" href="{{ url_for('dashboard.overview') }}">Voltar ao painel</a>
 </div>
 {% endblock %}
+{% else %}
+{% block auth_content %}
+<div style="text-align:center; padding:40px 20px;">
+  <h1 style="font-size:3rem; font-weight:700; color:var(--danger); margin-bottom:8px;">{{ status }}</h1>
+  <p style="color:var(--fg-muted); margin-bottom:24px;">{{ message }}</p>
+  <a class="btn btn-primary" href="{{ url_for('auth.login') }}">Voltar ao login</a>
+</div>
+{% endblock %}
+{% endif %}

@@ -7,36 +7,30 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   {% block extra_head %}{% endblock %}
 </head>
-<body class="{% if current_user %}has-sidebar{% endif %}">
+<body class="{% if current_user %}app-body{% else %}auth-body{% endif %}">
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
   <div class="flash-bar" role="status" aria-live="polite">
     {% for category, message in messages %}
-    <div class="flash flash-{{ category }}">{{ message }}</div>
+    <div class="flash alert-{{ category }}">{{ message }}</div>
     {% endfor %}
   </div>
   {% endif %}
   {% endwith %}
 
   {% if current_user %}
-  <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu" aria-expanded="false">
-    ☰
-  </button>
+  <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu" aria-expanded="false">☰</button>
   <aside class="sidebar" id="sidebar" aria-label="Navegação principal">
-    <div class="sidebar-brand">MetaBridge</div>
+    <div class="sidebar-brand">
+      <h1>MetaBridge</h1>
+    </div>
     <nav class="sidebar-nav">
-      <a class="{% if request.endpoint == 'dashboard.overview' %}active{% endif %}"
-         href="{{ url_for('dashboard.overview') }}">Visão geral</a>
-      <a class="{% if request.endpoint == 'dashboard.channels' %}active{% endif %}"
-         href="{{ url_for('dashboard.channels') }}">Canais</a>
-      <a class="{% if request.endpoint == 'dashboard.api_keys_list' %}active{% endif %}"
-         href="{{ url_for('dashboard.api_keys_list') }}">Chaves de API</a>
-      <a class="{% if request.endpoint == 'dashboard.webhooks' %}active{% endif %}"
-         href="{{ url_for('dashboard.webhooks') }}">Webhooks</a>
-      <a class="{% if request.endpoint == 'dashboard.logs' %}active{% endif %}"
-         href="{{ url_for('dashboard.logs') }}">Logs</a>
-      <a class="{% if request.endpoint == 'dashboard.settings' %}active{% endif %}"
-         href="{{ url_for('dashboard.settings') }}">Configurações</a>
+      <a class="{% if request.endpoint == 'dashboard.overview' %}active{% endif %}" href="{{ url_for('dashboard.overview') }}">Visão geral</a>
+      <a class="{% if request.endpoint == 'dashboard.channels' %}active{% endif %}" href="{{ url_for('dashboard.channels') }}">Canais</a>
+      <a class="{% if request.endpoint == 'dashboard.api_keys_list' %}active{% endif %}" href="{{ url_for('dashboard.api_keys_list') }}">Chaves de API</a>
+      <a class="{% if request.endpoint == 'dashboard.webhooks' %}active{% endif %}" href="{{ url_for('dashboard.webhooks') }}">Webhooks</a>
+      <a class="{% if request.endpoint == 'dashboard.logs' %}active{% endif %}" href="{{ url_for('dashboard.logs') }}">Logs</a>
+      <a class="{% if request.endpoint == 'dashboard.settings' %}active{% endif %}" href="{{ url_for('dashboard.settings') }}">Configurações</a>
     </nav>
     <div class="sidebar-footer">
       <div class="org">{{ membership.org_name or 'Organização' }}</div>
@@ -46,11 +40,23 @@
       </form>
     </div>
   </aside>
-  {% endif %}
-
-  <main class="main">
+  <main class="main-content">
     {% block content %}{% endblock %}
   </main>
+  {% else %}
+  <main class="auth-card">
+    <div class="auth-logo">
+      <h1>MetaBridge</h1>
+      <p>Plataforma de APIs da Meta</p>
+    </div>
+    {% block auth_content %}{% endblock %}
+    <div class="form-links">
+      <a href="{{ url_for('auth.termos') }}">Termos</a>
+      <span class="divider">•</span>
+      <a href="{{ url_for('auth.privacidade') }}">Privacidade</a>
+    </div>
+  </main>
+  {% endif %}
 
   <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
   {% block extra_scripts %}{% endblock %}

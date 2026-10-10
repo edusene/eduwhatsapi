@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Termos de Uso — MetaBridge{% endblock %}
-{% block content %}
-<div class="centered-card" style="max-width:800px">
-  <div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
-  <h1>Termos de Uso</h1>
+{% block auth_content %}
+<div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
+<h2 class="auth-title">Termos de Uso</h2>
+<div style="font-size:0.9rem; color:var(--fg-muted); line-height:1.7;">
   <p><strong>1. Objeto</strong><br>Estes Termos regem o uso da plataforma MetaBridge, que permite o envio e recebimento de mensagens através das APIs oficiais da Meta, incluindo a WhatsApp Cloud API.</p>
-  <p><strong>2. Responsabilidades do usuário</strong><br>Você se compromete a não utilizar a plataforma para envio de spam, mensagens não solicitadas, ou para fins que violem as políticas da Meta ou a legislação brasileira. É sua responsabilidade obter consentimento dos destinatários e manter os ativos da Meta em conformidade.</p>
-  <p><strong>3. Proibições</strong><br>É proibido: (a) tentar burlar limites ou controles da Meta; (b) usar a plataforma sem as permissões e aprovações necessárias; (c) compartilhar credenciais de acesso indevidamente.</p>
-  <p><strong>4. Limitação de responsabilidade</strong><br>A plataforma é fornecida "como está". Não nos responsabilizamos por indisponibilidade de serviços da Meta, nem por bloqueios decorrentes de violação de políticas por parte do usuário.</p>
-  <p><strong>5. Alterações</strong><br>Podemos atualizar estes Termos a qualquer momento. Alterações serão comunicadas pelo painel ou por e-mail.</p>
+  <p style="margin-top:12px;"><strong>2. Responsabilidades</strong><br>Você se compromete a não utilizar a plataforma para envio de spam, mensagens não solicitadas, ou para fins que violem as políticas da Meta ou a legislação brasileira.</p>
+  <p style="margin-top:12px;"><strong>3. Proibições</strong><br>É proibido: (a) tentar burlar limites ou controles da Meta; (b) usar a plataforma sem as permissões necessárias; (c) compartilhar credenciais indevidamente.</p>
+  <p style="margin-top:12px;"><strong>4. Limitação de responsabilidade</strong><br>A plataforma é fornecida "como está". Não nos responsabilizamos por indisponibilidade de serviços da Meta.</p>
+</div>
+<div class="form-links">
+  <a href="{{ url_for('auth.login') }}">Voltar ao login</a>
 </div>
 {% endblock %}

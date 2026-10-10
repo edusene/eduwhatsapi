@@ -1,32 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Logs — MetaBridge{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Logs</h1></div>
-<h2>Requisições de API</h2>
+<div class="page-header">
+  <h1>Logs</h1>
+  <p>Requisições de API e eventos de webhook</p>
+</div>
+
+<h2 style="margin-bottom:12px;">Requisições de API</h2>
 {% if api_logs %}
-<table>
-  <thead><tr><th>Horário</th><th>Método</th><th>Endpoint</th><th>Status</th><th>Latência</th><th>Request ID</th></tr></thead>
-  <tbody>
-    {% for r in api_logs %}
-    <tr><td>{{ r.created_at }}</td><td>{{ r.method }}</td><td>{{ r.endpoint }}</td>
-    <td>{{ r.status_code }}</td><td>{{ r.latency_ms or "—" }} ms</td><td><code>{{ r.request_id }}</code></td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-container">
+  <table>
+    <thead><tr><th>Horário</th><th>Método</th><th>Endpoint</th><th>Status</th><th>Latência</th><th>Request ID</th></tr></thead>
+    <tbody>
+      {% for r in api_logs %}
+      <tr>
+        <td>{{ r.created_at }}</td>
+        <td>{{ r.method }}</td>
+        <td>{{ r.endpoint }}</td>
+        <td>{{ r.status_code }}</td>
+        <td>{{ r.latency_ms or "—" }} ms</td>
+        <td><code style="font-size:0.8rem;">{{ r.request_id }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
-<p class="empty">Nenhuma requisição nos últimos registros.</p>
+<div class="card empty-state">
+  <p>Nenhuma requisição registrada ainda.</p>
+</div>
 {% endif %}
-<h2>Eventos de webhook</h2>
+
+<h2 style="margin-top:32px; margin-bottom:12px;">Eventos de webhook</h2>
 {% if webhook_events %}
-<table>
-  <thead><tr><th>Horário</th><th>Evento</th><th>Status</th></tr></thead>
-  <tbody>
-    {% for e in webhook_events %}
-    <tr><td>{{ e.received_at }}</td><td>{{ e.event_type }}</td><td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-container">
+  <table>
+    <thead><tr><th>Horário</th><th>Evento</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for e in webhook_events %}
+      <tr>
+        <td>{{ e.received_at }}</td>
+        <td>{{ e.event_type }}</td>
+        <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
-<p class="empty">Nenhum evento recebido.</p>
+<div class="card empty-state">
+  <p>Nenhum evento recebido ainda.</p>
+</div>
 {% endif %}
 {% endblock %}

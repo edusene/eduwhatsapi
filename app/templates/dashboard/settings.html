@@ -1,24 +1,43 @@
 {% extends "base.html" %}
 {% block title %}Configurações — MetaBridge{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Configurações</h1></div>
-<h2>Organização</h2>
-<p><strong>Nome:</strong> {{ org.name }}<br><strong>Slug:</strong> {{ org.slug }}</p>
-{% if current_role == 'owner' %}
-<form method="post" action="{{ url_for('dashboard.settings_rename') }}" class="form-inline">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label>Novo nome</label>
-  <input type="text" name="name" value="{{ org.name }}" required maxlength="120">
-  <button type="submit" class="btn btn-primary">Salvar</button>
-</form>
-{% endif %}
-<h2>Membros</h2>
-<table>
-  <thead><tr><th>Usuário</th><th>Papel</th></tr></thead>
-  <tbody>
-    {% for m in members %}
-    <tr><td>{{ m.user_id[:8] }}…</td><td><span class="badge badge-role">{{ m.role }}</span></td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="page-header">
+  <h1>Configurações</h1>
+  <p>Gerencie sua organização e conta</p>
+</div>
+
+<div class="card" style="margin-bottom:24px;">
+  <h2 style="margin-bottom:16px; font-size:1.1rem;">Organização</h2>
+  <p style="color:var(--fg-muted); margin-bottom:16px;">
+    <strong>Nome:</strong> {{ org.name }}<br>
+    <strong>Slug:</strong> {{ org.slug }}
+  </p>
+  {% if current_role == 'owner' %}
+  <form method="post" action="{{ url_for('dashboard.settings_rename') }}" class="form-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label>Novo nome</label>
+      <input type="text" name="name" value="{{ org.name }}" required maxlength="120">
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 style="margin-bottom:16px; font-size:1.1rem;">Membros</h2>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Usuário</th><th>Papel</th></tr></thead>
+      <tbody>
+        {% for m in members %}
+        <tr>
+          <td><code style="font-size:0.85rem;">{{ m.user_id[:8] }}…</code></td>
+          <td><span class="badge badge-role">{{ m.role }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

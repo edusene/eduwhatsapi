@@ -1,68 +1,96 @@
 {% extends "base.html" %}
 {% block title %}Webhooks — MetaBridge{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Webhooks de saída</h1></div>
+<div class="page-header">
+  <h1>Webhooks de saída</h1>
+  <p>Configure URLs para receber eventos da plataforma</p>
+</div>
+
 {% if membership.role in ('owner','admin') %}
-<form method="post" action="{{ url_for('dashboard.webhooks_create') }}" class="form">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label>URL HTTPS</label>
-  <input type="url" name="url" required placeholder="https://exemplo.com/webhook">
-  <label>Descrição</label>
-  <input type="text" name="description" maxlength="200">
-  <label>Eventos</label>
-  <div class="checkboxes">
-    <label><input type="checkbox" name="events" value="message.received"> message.received</label>
-    <label><input type="checkbox" name="events" value="message.status.updated"> message.status.updated</label>
-    <label><input type="checkbox" name="events" value="channel.connected"> channel.connected</label>
-    <label><input type="checkbox" name="events" value="channel.disconnected"> channel.disconnected</label>
-    <label><input type="checkbox" name="events" value="api.request.failed"> api.request.failed</label>
-  </div>
-  <button type="submit" class="btn btn-primary">Criar webhook</button>
-</form>
+<div class="card" style="margin-bottom:24px;">
+  <h2 style="margin-bottom:16px; font-size:1.1rem;">Novo webhook</h2>
+  <form method="post" action="{{ url_for('dashboard.webhooks_create') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label>URL HTTPS</label>
+      <input type="url" name="url" required placeholder="https://exemplo.com/webhook">
+    </div>
+    <div class="form-group">
+      <label>Descrição</label>
+      <input type="text" name="description" maxlength="200" placeholder="Opcional">
+    </div>
+    <div class="form-group">
+      <label>Eventos</label>
+      <div class="checkboxes">
+        <label><input type="checkbox" name="events" value="message.received"> message.received</label>
+        <label><input type="checkbox" name="events" value="message.status.updated"> message.status.updated</label>
+        <label><input type="checkbox" name="events" value="channel.connected"> channel.connected</label>
+        <label><input type="checkbox" name="events" value="channel.disconnected"> channel.disconnected</label>
+        <label><input type="checkbox" name="events" value="api.request.failed"> api.request.failed</label>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Criar webhook</button>
+  </form>
+</div>
 {% endif %}
-<h2>Endpoints</h2>
+
+<h2 style="margin-bottom:12px;">Endpoints</h2>
 {% if endpoints %}
-<table>
-  <thead><tr><th>URL</th><th>Eventos</th><th>Status</th><th>Ações</th></tr></thead>
-  <tbody>
-    {% for e in endpoints %}
-    <tr>
-      <td>{{ e.url }}</td>
-      <td>{{ e.events | join(", ") }}</td>
-      <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
-      <td class="actions-cell">
-        <form method="post" action="{{ url_for('dashboard.webhooks_test', endpoint_id=e.id) }}" style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-sm">Testar</button>
-        </form>
-        <form method="post" action="{{ url_for('dashboard.webhooks_rotate_secret', endpoint_id=e.id) }}" style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-sm" data-confirm="Nova chave de assinatura? A antiga parará de funcionar.">Rotacionar</button>
-        </form>
-        <form method="post" action="{{ url_for('dashboard.webhooks_delete', endpoint_id=e.id) }}" style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-sm btn-danger" data-confirm="Remover este webhook?">Remover</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-container">
+  <table>
+    <thead><tr><th>URL</th><th>Eventos</th><th>Status</th><th>Ações</th></tr></thead>
+    <tbody>
+      {% for e in endpoints %}
+      <tr>
+        <td>{{ e.url }}</td>
+        <td>{{ e.events | join(", ") }}</td>
+        <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
+        <td class="actions-cell">
+          <form method="post" action="{{ url_for('dashboard.webhooks_test', endpoint_id=e.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm">Testar</button>
+          </form>
+          <form method="post" action="{{ url_for('dashboard.webhooks_rotate_secret', endpoint_id=e.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm" data-confirm="Nova chave de assinatura? A antiga parará de funcionar.">Rotacionar</button>
+          </form>
+          <form method="post" action="{{ url_for('dashboard.webhooks_delete', endpoint_id=e.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger" data-confirm="Remover este webhook?">Remover</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
-<p class="empty">Nenhum webhook cadastrado.</p>
+<div class="card empty-state">
+  <p>Nenhum webhook cadastrado ainda.</p>
+</div>
 {% endif %}
-<h2>Histórico de entregas</h2>
+
+<h2 style="margin-top:32px; margin-bottom:12px;">Histórico de entregas</h2>
 {% if deliveries %}
-<table>
-  <thead><tr><th>Evento</th><th>Status</th><th>Tentativas</th><th>HTTP</th><th>Horário</th></tr></thead>
-  <tbody>
-    {% for d in deliveries %}
-    <tr><td>{{ d.event_type }}</td><td><span class="badge badge-{{ d.status }}">{{ d.status }}</span></td>
-    <td>{{ d.attempts }}</td><td>{{ d.response_status or "—" }}</td><td>{{ d.created_at }}</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-container">
+  <table>
+    <thead><tr><th>Evento</th><th>Status</th><th>Tentativas</th><th>HTTP</th><th>Horário</th></tr></thead>
+    <tbody>
+      {% for d in deliveries %}
+      <tr>
+        <td>{{ d.event_type }}</td>
+        <td><span class="badge badge-{{ d.status }}">{{ d.status }}</span></td>
+        <td>{{ d.attempts }}</td>
+        <td>{{ d.response_status or "—" }}</td>
+        <td>{{ d.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
-<p class="empty">Sem entregas ainda.</p>
+<div class="card empty-state">
+  <p>Nenhuma entrega registrada ainda.</p>
+</div>
 {% endif %}
 {% endblock %}

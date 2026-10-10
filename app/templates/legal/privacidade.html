@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Política de Privacidade — MetaBridge{% endblock %}
-{% block content %}
-<div class="centered-card" style="max-width:800px">
-  <div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
-  <h1>Política de Privacidade</h1>
-  <p><strong>1. Dados coletados</strong><br>Coletamos e-mail, identificadores da Meta (WABA, número de telefone), logs de requisições sanitizados (sem conteúdo de mensagens) e dados de uso da API. Não armazenamos o conteúdo completo das mensagens além do necessário ao funcionamento.</p>
-  <p><strong>2. Finalidade</strong><br>Os dados são usados para operar a plataforma, autenticar usuários, auditar uso e entregar eventos de webhook.</p>
-  <p><strong>3. Base legal (LGPD)</strong><br>Execução de contrato e interesse legítimo (segurança e auditoria). Você pode exercer seus direitos de titular (acesso, correção, exclusão) pelo e-mail: privacidade@seudominio.com.br.</p>
-  <p><strong>4. Retenção e exclusão</strong><br>Logs e eventos são retidos pelo período necessário à operação e auditoria, com limite sugerido de 90 dias. Após a desconexão de um canal, os tokens são removidos imediatamente.</p>
-  <p><strong>5. Segurança</strong><br>Tokens da Meta são criptografados no banco. Chaves internas são armazenadas apenas como hash. O acesso é isolado por organização.</p>
+{% block auth_content %}
+<div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
+<h2 class="auth-title">Política de Privacidade</h2>
+<div style="font-size:0.9rem; color:var(--fg-muted); line-height:1.7;">
+  <p><strong>1. Dados coletados</strong><br>Coletamos e-mail, identificadores da Meta, logs de requisições sanitizados e dados de uso. Não armazenamos conteúdo completo de mensagens.</p>
+  <p style="margin-top:12px;"><strong>2. Finalidade</strong><br>Os dados são usados para operar a plataforma, autenticar usuários, auditar uso e entregar eventos de webhook.</p>
+  <p style="margin-top:12px;"><strong>3. LGPD</strong><br>Você pode exercer seus direitos de titular (acesso, correção, exclusão) pelo e-mail: privacidade@seudominio.com.br.</p>
+  <p style="margin-top:12px;"><strong>4. Segurança</strong><br>Tokens da Meta são criptografados. Chaves internas são armazenadas apenas como hash.</p>
+</div>
+<div class="form-links">
+  <a href="{{ url_for('auth.login') }}">Voltar ao login</a>
 </div>
 {% endblock %}

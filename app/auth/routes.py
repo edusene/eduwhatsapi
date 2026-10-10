@@ -1,11 +1,11 @@
 """Rotas de autenticação (Supabase Auth) e páginas legais."""
 from __future__ import annotations
 
+import logging
 import re
 
 from flask import (
     Blueprint,
-    abort,
     flash,
     redirect,
     render_template,
@@ -18,6 +18,8 @@ from app.extensions import limiter
 from app.services import organizations, security
 from app.services.supabase_client import create_user_client, get_auth_client
 
+logger = logging.getLogger(__name__)
+
 bp = Blueprint("auth", __name__)
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -26,6 +28,14 @@ def _safe_next(next_url: str | None) -> str:
     if next_url and next_url.startswith("/") and not next_url.startswith("//"):
         return next_url
     return url_for("dashboard.overview")
+
+
+def _is_supabase_configured() -> bool:
+    try:
+        get_auth_client()
+        return True
+    except Exception:
+        return False
 
 
 @bp.get("/login")
@@ -43,6 +53,14 @@ def login_post():
     if not email or not password:
         flash("E-mail e senha são obrigatórios.", "error")
         return render_template("auth/login.html"), 400
+
+    if not _is_supabase_configured():
+        flash(
+            "Serviço de autenticação não configurado. Verifique as variáveis SUPABASE_URL e SUPABASE_ANON_KEY.",
+            "error",
+        )
+        return render_template("auth/login.html"), 503
+
     try:
         resp = get_auth_client().auth.sign_in_with_password(
             {"email": email, "password": password}
@@ -50,8 +68,10 @@ def login_post():
         user = resp.user
         access_token = resp.session.access_token if resp.session else None
     except Exception as exc:
+        logger.warning("Falha no login para %s: %s", email, type(exc).__name__)
         flash("E-mail ou senha inválidos.", "error")
         return render_template("auth/login.html"), 400
+
     session.clear()
     session["user"] = {"id": str(user.id), "email": user.email}
     if access_token:
@@ -73,6 +93,7 @@ def register_post():
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
     org_name = request.form.get("org_name", "").strip()
+
     errors = []
     if not email or not _EMAIL_RE.match(email) or len(email) > 254:
         errors.append("E-mail inválido.")
@@ -84,6 +105,14 @@ def register_post():
         for e in errors:
             flash(e, "error")
         return render_template("auth/register.html"), 400
+
+    if not _is_supabase_configured():
+        flash(
+            "Serviço de autenticação não configurado. Verifique as variáveis SUPABASE_URL e SUPABASE_ANON_KEY.",
+            "error",
+        )
+        return render_template("auth/register.html"), 503
+
     try:
         resp = get_auth_client().auth.sign_up(
             {"email": email, "password": password}
@@ -91,34 +120,44 @@ def register_post():
         user = resp.user
         access_token = resp.session.access_token if resp.session else None
     except Exception as exc:
-        msg = str(exc)
-        if "already" in msg.lower() or "exists" in msg.lower():
+        logger.warning("Falha no registro para %s: %s", email, str(exc))
+        msg = str(exc).lower()
+        if "already" in msg or "exists" in msg or "duplicate" in msg:
             flash("Este e-mail já está cadastrado.", "error")
-        elif "password" in msg.lower():
+        elif "password" in msg:
             flash("A senha é muito fraca ou inválida.", "error")
+        elif "rate" in msg or "limit" in msg:
+            flash("Muitas tentativas. Aguarde alguns minutos.", "error")
         else:
             flash("Não foi possível criar a conta. Tente novamente.", "error")
         return render_template("auth/register.html"), 400
-    if user:
-        try:
-            organizations.create_organization_for_user(str(user.id), org_name)
-        except Exception:
-            pass
-        session["user"] = {"id": str(user.id), "email": user.email}
-        if access_token:
-            session["access_token"] = access_token
-        security.generate_csrf_token()
-        if access_token:
-            flash("Conta criada! Bem-vindo.", "success")
-            return redirect(url_for("dashboard.overview"))
-        flash(
-            "Conta criada. Confira seu e-mail para confirmar o cadastro "
-            "antes de acessar.",
-            "info",
-        )
-        return redirect(url_for("auth.login"))
-    flash("Não foi possível criar a conta.", "error")
-    return render_template("auth/register.html"), 400
+
+    if not user:
+        logger.error("Registro retornou sem usuário para %s", email)
+        flash("Erro inesperado ao criar conta.", "error")
+        return render_template("auth/register.html"), 400
+
+    # Criar organização para o usuário
+    try:
+        organizations.create_organization_for_user(str(user.id), org_name)
+    except Exception as exc:
+        logger.error("Falha ao criar organização para %s: %s", email, str(exc))
+        flash("Conta criada, mas houve um erro ao configurar a organização. Entre em contato com o suporte.", "warning")
+
+    session["user"] = {"id": str(user.id), "email": user.email}
+    if access_token:
+        session["access_token"] = access_token
+    security.generate_csrf_token()
+
+    if access_token:
+        flash("Conta criada! Bem-vindo.", "success")
+        return redirect(url_for("dashboard.overview"))
+
+    flash(
+        "Conta criada. Confira seu e-mail para confirmar o cadastro antes de acessar.",
+        "info",
+    )
+    return redirect(url_for("auth.login"))
 
 
 @bp.post("/logout")
@@ -145,16 +184,21 @@ def forgot_password_post():
     if not email or not _EMAIL_RE.match(email):
         flash("Informe um e-mail válido.", "error")
         return render_template("auth/forgot_password.html"), 400
+
+    if not _is_supabase_configured():
+        flash("Serviço de autenticação não configurado.", "error")
+        return render_template("auth/forgot_password.html"), 503
+
     try:
         base = request.root_url.rstrip("/")
         get_auth_client().auth.reset_password_for_email(
             email, {"redirect_to": f"{base}/reset-password"}
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Falha ao enviar recuperação para %s: %s", email, str(exc))
+
     flash(
-        "Se o e-mail existir em nossa base, enviaremos instruções "
-        "de recuperação.",
+        "Se o e-mail existir em nossa base, enviaremos instruções de recuperação.",
         "info",
     )
     return redirect(url_for("auth.login"))
@@ -180,14 +224,14 @@ def reset_password_post():
     if new_password != confirm:
         flash("As senhas não coincidem.", "error")
         return render_template("auth/reset_password.html"), 400
+
     try:
         create_user_client(token).auth.update_user({"password": new_password})
-    except Exception:
-        flash(
-            "Não foi possível alterar a senha. O link pode ter expirado.",
-            "error",
-        )
+    except Exception as exc:
+        logger.warning("Falha ao atualizar senha: %s", str(exc))
+        flash("Não foi possível alterar a senha. O link pode ter expirado.", "error")
         return render_template("auth/reset_password.html"), 400
+
     flash("Senha atualizada. Faça login com a nova senha.", "success")
     return redirect(url_for("auth.login"))
 
