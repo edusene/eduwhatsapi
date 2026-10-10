@@ -83,8 +83,12 @@ def create_organization_for_user(user_id: str, name: str) -> dict[str, Any]:
     """Cria a organização inicial do usuário e o associa como owner."""
     name = (name or "").strip()[:120] or "Minha Organização"
     client = get_service_client()
+    # Usa parte do user_id no slug para garantir unicidade
+    base_slug = slugify(name)
+    unique_suffix = user_id.replace("-", "")[:8]
+    slug = f"{base_slug}-{unique_suffix}"
     org = client.table("organizations").insert(
-        {"name": name, "slug": slugify(name), "owner_user_id": user_id}
+        {"name": name, "slug": slug, "owner_user_id": user_id}
     ).execute().data[0]
     client.table("organization_members").insert(
         {"organization_id": org["id"], "user_id": user_id, "role": "owner"}
