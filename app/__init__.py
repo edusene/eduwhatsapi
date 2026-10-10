@@ -202,3 +202,9 @@ def _register_core_routes(app: Flask) -> None:
         if g.get("user"):
             return redirect(url_for("dashboard.overview"))
         return redirect(url_for("auth.login"))
+
+    return app
+
+
+# Instância de nível de módulo para servidores WSGI (ex: gunicorn app:app)
+app = create_app()
