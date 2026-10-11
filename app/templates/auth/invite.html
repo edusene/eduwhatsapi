@@ -1,0 +1,33 @@
+{% extends "layouts/auth.html" %}
+{% block title %}Convite — {{ app_name }}{% endblock %}
+{% block content %}
+{% if invalid %}
+<h1>Convite indisponível</h1>
+<p class="sub">Este convite não existe, expirou, foi cancelado ou já foi usado. Peça um novo link a quem convidou você.</p>
+<a class="btn btn-primary" href="{{ url_for('auth.login') }}">Ir para o login</a>
+{% else %}
+{% set role_label = {'admin':'Administrador','developer':'Desenvolvedor','viewer':'Leitura'}.get(inv.role, inv.role) %}
+<h1>Você foi convidado</h1>
+<p class="sub">Entre na equipe <strong>{{ inv.org_name }}</strong> com o papel <strong>{{ role_label }}</strong>.</p>
+<dl class="kv mb-3"><dt>E-mail convidado</dt><dd>{{ inv.email }}</dd><dt>Expira em</dt><dd>{{ inv.expires_at|dt }}</dd></dl>
+{% if current_user %}
+  {% if current_user.email == inv.email %}
+  <form method="post" action="{{ url_for('auth.invite_accept', token=token) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-primary btn-block btn-lg" type="submit">Aceitar convite</button>
+  </form>
+  {% else %}
+  <div class="alert alert-warning">{{ icon('alert') }}<div>Você está conectado como <strong>{{ current_user.email }}</strong>. Saia e entre com <strong>{{ inv.email }}</strong> para aceitar.</div></div>
+  <form method="post" action="{{ url_for('auth.logout') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-block" type="submit">Sair desta conta</button>
+  </form>
+  {% endif %}
+{% else %}
+<div class="stack">
+  <a class="btn btn-primary btn-block btn-lg" href="{{ url_for('auth.login', next=url_for('auth.invite', token=token)) }}">Já tenho conta — entrar</a>
+  <a class="btn btn-block btn-lg" href="{{ url_for('auth.register', invite=token) }}">Criar conta com {{ inv.email }}</a>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

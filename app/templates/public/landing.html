@@ -1,0 +1,116 @@
+{% extends "layouts/public.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ app_name }} — API oficial do WhatsApp e chat para equipes{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow">{{ icon('shield', 'icon-sm') }} Construído sobre a WhatsApp Cloud API oficial</span>
+    <h1>WhatsApp oficial <em>conectado ao seu sistema</em> — e um chat para a sua equipe.</h1>
+    <p class="lead">Conecte seu número pelos fluxos oficiais da Meta, integre com n8n, Make ou seu sistema usando nossas chaves de API e atenda clientes numa caixa de entrada compartilhada.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Começar agora {{ icon('arrow-right') }}</a>
+      <a class="btn btn-lg" href="{{ url_for('public.docs') }}">{{ icon('code') }} Ver a documentação</a>
+    </div>
+    <p class="hero-note">Sem QR Code e sem automação não autorizada. As mensagens são cobradas pela Meta conforme a tabela oficial dela.</p>
+
+    <div class="hero-visual" aria-hidden="true">
+      <div class="mock">
+        <div class="mock-bar"><i></i><i></i><i></i></div>
+<pre><code>curl -X POST {{ app_base_url }}/api/v1/whatsapp/PHONE_ID/messages \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "5511999998888",
+    "type": "text",
+    "text": { "body": "Seu pedido saiu para entrega 🚚" }
+  }'
+
+{ "data": { "wamid": "wamid.HBgM...", "status": "accepted" } }</code></pre>
+      </div>
+      <div class="mock">
+        <div class="mock-bar"><i></i><i></i><i></i></div>
+        <div class="mock-chat">
+          <div class="bubble">Olá! Meu pedido já foi enviado?<div class="bubble-meta">10:41</div></div>
+          <div class="bubble out">Oi, Ana! Saiu para entrega agora há pouco. 🚚<div class="bubble-meta">10:42 {{ icon('check-double', 'read') }}</div></div>
+          <div class="bubble">Perfeito, obrigada!<div class="bubble-meta">10:42</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt" id="planos">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Escolha como usar</h2>
+      <p>Mesma conexão oficial, dois jeitos de trabalhar. Você pode trocar de plano a qualquer momento nas configurações.</p>
+    </div>
+    <div class="plans">
+      <div class="plan">
+        <span class="badge">Para desenvolvedores</span>
+        <h3>API Oficial</h3>
+        <p class="plan-desc">Só a infraestrutura: conecte o número e use a API no seu sistema, bot ou automação.</p>
+        <ul>
+          <li>{{ icon('check') }} Envio de texto, mídia, modelos, botões e listas</li>
+          <li>{{ icon('check') }} Chaves <code>sk_live_</code> e <code>sk_test_</code> com escopos</li>
+          <li>{{ icon('check') }} Webhooks assinados com HMAC e reenvio automático</li>
+          <li>{{ icon('check') }} Status de entrega e logs de cada chamada</li>
+          <li>{{ icon('check') }} Conteúdo das mensagens não fica armazenado</li>
+        </ul>
+        <a class="btn btn-lg btn-block" href="{{ url_for('auth.register', plan='api') }}">Quero só a API</a>
+      </div>
+      <div class="plan featured">
+        <span class="badge badge-brand">Mais completo</span>
+        <h3>API + Chat</h3>
+        <p class="plan-desc">Tudo da API, mais uma caixa de entrada para a sua equipe atender pelo navegador.</p>
+        <ul>
+          <li>{{ icon('check') }} Tudo do plano API Oficial</li>
+          <li>{{ icon('check') }} Caixa de entrada compartilhada em tempo real</li>
+          <li>{{ icon('check') }} Fotos, áudios, documentos e respostas a mensagens</li>
+          <li>{{ icon('check') }} Controle da janela de 24h e envio de modelos</li>
+          <li>{{ icon('check') }} Atribuição de conversas e membros com papéis</li>
+        </ul>
+        <a class="btn btn-primary btn-lg btn-block" href="{{ url_for('auth.register', plan='api_chat') }}">Quero API + Chat</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="recursos">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Tudo o que você precisa para operar o WhatsApp oficial</h2>
+      <p>Pensado para quem integra sistemas e para quem atende clientes.</p>
+    </div>
+    <div class="features">
+      <div class="feature"><div class="icon-tile">{{ icon('link') }}</div><h3>Conexão oficial</h3><p>Cadastro incorporado da Meta (Embedded Signup), inclusive coexistência com o app WhatsApp Business, ou conexão manual com token de System User.</p></div>
+      <div class="feature"><div class="icon-tile">{{ icon('key') }}</div><h3>Chaves de API próprias</h3><p>Seus clientes e automações nunca veem o token da Meta. Revogue ou rotacione chaves a qualquer momento.</p></div>
+      <div class="feature"><div class="icon-tile">{{ icon('webhook') }}</div><h3>Webhooks confiáveis</h3><p>Mensagens recebidas e status de entrega no seu endpoint, assinados com HMAC-SHA256 e com novas tentativas.</p></div>
+      <div class="feature"><div class="icon-tile">{{ icon('chat') }}</div><h3>Caixa de entrada</h3><p>Atenda pelo navegador, com histórico, mídias, modelos aprovados e indicação da janela de atendimento.</p></div>
+      <div class="feature"><div class="icon-tile">{{ icon('zap') }}</div><h3>Modo de teste</h3><p>Chaves <code>sk_test_</code> validam tudo sem enviar nada à Meta — ideal para montar fluxos no n8n.</p></div>
+      <div class="feature"><div class="icon-tile">{{ icon('shield') }}</div><h3>Segurança e LGPD</h3><p>Tokens criptografados, isolamento por empresa, logs sem dados sensíveis e retenção configurável.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="wrap">
+    <div class="section-head"><h2>Comece em três passos</h2></div>
+    <div class="how">
+      <div><h3>Crie sua conta</h3><p>Escolha o plano e convide sua equipe.</p></div>
+      <div><h3>Conecte o número</h3><p>Autorize pelo fluxo oficial da Meta. Nada de QR Code.</p></div>
+      <div><h3>Integre ou atenda</h3><p>Gere uma chave de API ou abra a caixa de entrada.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="cta-band">
+      <h2>Pronto para usar a API oficial do WhatsApp?</h2>
+      <p>Crie sua conta e conecte seu primeiro número hoje.</p>
+      <a class="btn btn-lg" href="{{ url_for('auth.register') }}">Criar conta</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

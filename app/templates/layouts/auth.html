@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block body_class %}auth-body{% endblock %}
+{% block body %}
+<div class="auth">
+  <aside class="auth-aside">
+    <a href="{{ url_for('public.index') }}"><img src="{{ url_for('static', filename='img/logo-light.svg') }}" alt="{{ app_name }}" width="170" height="34"></a>
+    <div>
+      <h2>A API oficial do WhatsApp para o seu sistema — e um chat para a sua equipe.</h2>
+      <ul>
+        <li>{{ icon('check') }} Conexão pelos fluxos oficiais da Meta: sem QR Code e sem automação não autorizada.</li>
+        <li>{{ icon('check') }} Chaves de API próprias, webhooks assinados e logs de cada chamada.</li>
+        <li>{{ icon('check') }} Caixa de entrada compartilhada para atender pelo navegador.</li>
+      </ul>
+    </div>
+    <small>Integra-se às APIs oficiais da Meta. Não é um produto da Meta.</small>
+  </aside>
+  <main class="auth-main" id="conteudo">
+    <div class="auth-card">
+      <a class="auth-mobile-logo" href="{{ url_for('public.index') }}"><img src="{{ url_for('static', filename='img/logo.svg') }}" alt="{{ app_name }}" width="150" height="30"></a>
+      {% block content %}{% endblock %}
+      <p class="small muted mt-4"><a href="{{ url_for('public.termos') }}">Termos de Uso</a> · <a href="{{ url_for('public.privacidade') }}">Privacidade</a></p>
+    </div>
+  </main>
+</div>
+{% endblock %}

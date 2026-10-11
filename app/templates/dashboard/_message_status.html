@@ -1,0 +1,3 @@
+{% set labels = {'received':'Recebida','accepted':'Aceita','sent':'Enviada','delivered':'Entregue','read':'Lida','failed':'Falhou','test':'Teste'} %}
+{% set kinds = {'received':'badge-info','accepted':'','sent':'','delivered':'badge-ok','read':'badge-ok','failed':'badge-danger','test':'badge-warn'} %}
+<span class="badge {{ kinds.get(m.status, '') }}"><span class="dot"></span>{{ labels.get(m.status, m.status) }}</span>

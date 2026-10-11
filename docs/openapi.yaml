@@ -1,192 +1,305 @@
 openapi: 3.0.3
 info:
-  title: AutoZap — API Pública
-  version: 1.0.0
+  title: AutoZap — API pública
+  version: 2.0.0
   description: >-
-    API pública da plataforma AutoZap para envio de mensagens via WhatsApp
-    Cloud API (Meta) e consulta de canais e uso. A autenticação usa chaves
-    internas da plataforma (sk_test_/sk_live_), que NÃO são tokens da Meta —
-    os tokens da Meta ficam criptografados no servidor.
-  contact:
-    name: Suporte AutoZap
+    Camada REST sobre a WhatsApp Cloud API oficial da Meta. A autenticação usa
+    chaves internas da plataforma (sk_live_ / sk_test_), que NÃO são tokens da
+    Meta — os tokens ficam criptografados no servidor. Chaves sk_test_ validam
+    tudo mas não chamam a Meta (respostas com "test_mode": true).
+    O formato dos objetos de mensagem segue a documentação oficial da Cloud API.
 servers:
   - url: https://SUA-URL.onrender.com/api/v1
-    description: Produção (Render)
+    description: Produção
   - url: http://localhost:5000/api/v1
     description: Desenvolvimento local
+security:
+  - bearerAuth: []
 tags:
   - name: Conta
-    description: Informações da chave e da organização
-  - name: Canais
-    description: Canais Meta conectados (WhatsApp)
+  - name: Números
   - name: Mensagens
-    description: Envio de mensagens WhatsApp
+  - name: Modelos e mídia
+  - name: Conversas
   - name: Uso
-    description: Métricas de uso da API
 paths:
   /me:
     get:
       tags: [Conta]
-      summary: Identidade da chave de API
-      description: Retorna a organização, o ambiente e os escopos da chave usada na requisição.
+      summary: Organização, plano e chave usada
       operationId: getMe
       responses:
         "200":
-          description: Chave válida.
+          description: OK
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  organization_id:
-                    type: string
-                    format: uuid
-                  key_id:
-                    type: string
-                    format: uuid
-                  environment:
-                    type: string
-                    enum: [test, live]
-                  scopes:
-                    type: array
-                    items:
-                      type: string
-                  request_id:
-                    type: string
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "429":
-          $ref: "#/components/responses/RateLimited"
+                  organization:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      name: { type: string }
+                      plan: { type: string, enum: [api, api_chat] }
+                  key:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      name: { type: string }
+                      environment: { type: string, enum: [test, live] }
+                      scopes: { type: array, items: { type: string } }
+                  request_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /channels:
     get:
-      tags: [Canais]
-      summary: Lista canais conectados
-      description: >-
-        Lista as conexões Meta da organização (somente campos seguros — nunca
-        tokens). Escopo necessário: channels:read.
+      tags: [Números]
+      summary: Lista os números ativos da organização
+      description: "Escopo: channels:read"
       operationId: listChannels
       responses:
         "200":
-          description: Lista de canais.
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Channel" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /channels/{phone_number_id}:
+    get:
+      tags: [Números]
+      summary: Detalhes de um número
+      description: "Escopo: channels:read"
+      operationId: getChannel
+      parameters: [{ $ref: "#/components/parameters/PhoneNumberId" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: "#/components/schemas/Channel" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /whatsapp/{phone_number_id}/messages:
+    post:
+      tags: [Mensagens]
+      summary: Envia uma mensagem
+      description: >-
+        Escopo messages:send. O corpo segue o objeto de mensagem da Cloud API, sem
+        messaging_product. Mensagens livres só são entregues dentro da janela de 24h
+        após a última mensagem do contato; fora dela, use type=template.
+      operationId: sendMessage
+      parameters:
+        - { $ref: "#/components/parameters/PhoneNumberId" }
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 8–128 caracteres. Repetições devolvem a resposta original (header Idempotent-Replayed).
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendMessage" }
+            examples:
+              texto:
+                value: { to: "5511999998888", type: text, text: { body: "Mensagem de teste" } }
+              modelo:
+                value:
+                  to: "5511999998888"
+                  type: template
+                  template:
+                    name: pedido_enviado
+                    language: { code: pt_BR }
+                    components: [{ type: body, parameters: [{ type: text, text: Ana }] }]
+              imagem:
+                value: { to: "5511999998888", type: image, image: { link: "https://exemplo.com/foto.jpg", caption: "Seu produto" } }
+      responses:
+        "201":
+          description: Mensagem aceita pela Meta (ou registrada em modo de teste)
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Channel"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "429":
-          $ref: "#/components/responses/RateLimited"
-  /whatsapp/{phone_number_id}/messages:
+                    allOf:
+                      - $ref: "#/components/schemas/Message"
+                      - type: object
+                        properties:
+                          meta_response: { type: object, description: Resposta original da Meta }
+                  test_mode: { type: boolean }
+                  request_id: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/MetaError" }
+        "504": { $ref: "#/components/responses/MetaError" }
+
+  /whatsapp/{phone_number_id}/messages/read:
     post:
       tags: [Mensagens]
-      summary: Envia mensagem de texto WhatsApp
-      description: >-
-        Envia uma mensagem de texto pelo número conectado, fazendo proxy para a
-        WhatsApp Cloud API oficial. Escopo necessário: messages:send.
-
-        Idempotência: envie o header `Idempotency-Key` (8 a 128 caracteres)
-        para que retries com a mesma chave retornem a resposta original sem
-        reenviar a mensagem (header `X-Idempotent-Replay: true` na resposta).
-      operationId: sendWhatsappMessage
-      parameters:
-        - name: phone_number_id
-          in: path
-          required: true
-          description: ID numérico do número na Meta (5 a 25 dígitos).
-          schema:
-            type: string
-            pattern: '^\d{5,25}$'
-        - name: Idempotency-Key
-          in: header
-          required: false
-          description: Chave de idempotência opcional (8 a 128 caracteres).
-          schema:
-            type: string
-            minLength: 8
-            maxLength: 128
+      summary: Marca uma mensagem recebida como lida
+      description: "Escopo: messages:send"
+      operationId: markRead
+      parameters: [{ $ref: "#/components/parameters/PhoneNumberId" }]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SendMessageRequest"
-            example:
-              to: "5511999998888"
-              type: text
-              text:
-                body: Olá! Sua matrícula foi confirmada.
+              type: object
+              required: [message_id]
+              properties: { message_id: { type: string, example: "wamid.HBgM..." } }
+      responses:
+        "200": { description: OK }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/MetaError" }
+
+  /messages:
+    get:
+      tags: [Mensagens]
+      summary: Lista mensagens (status de entrega)
+      description: "Escopo: messages:read. content só é preenchido no plano api_chat."
+      operationId: listMessages
+      parameters:
+        - { name: phone_number_id, in: query, schema: { type: string } }
+        - { name: direction, in: query, schema: { type: string, enum: [inbound, outbound] } }
+        - { name: contact, in: query, schema: { type: string }, description: Número do contato }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: before, in: query, schema: { type: string, format: date-time }, description: Use next_before da página anterior }
       responses:
         "200":
-          description: Mensagem aceita pela Meta.
-          headers:
-            X-Idempotent-Replay:
-              description: Presente e igual a "true" quando a resposta veio da idempotência.
-              schema:
-                type: string
+          description: OK
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  data:
-                    $ref: "#/components/schemas/MetaSendMessageResponse"
-                  request_id:
-                    type: string
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          description: Nenhum canal ativo da organização para o número informado.
+                  data: { type: array, items: { $ref: "#/components/schemas/Message" } }
+                  next_before: { type: string, nullable: true }
+
+  /messages/{message_id}:
+    get:
+      tags: [Mensagens]
+      summary: Consulta uma mensagem pelo id interno ou wamid
+      description: "Escopo: messages:read"
+      operationId: getMessage
+      parameters:
+        - { name: message_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-              example:
-                error:
-                  code: channel_not_found
-                  message: Nenhum canal ativo encontrado para este número.
-                  request_id: "9f2c..."
-        "429":
-          $ref: "#/components/responses/RateLimited"
-        "500":
-          description: Credencial do canal indisponível no servidor.
+                type: object
+                properties: { data: { $ref: "#/components/schemas/Message" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /whatsapp/{phone_number_id}/templates:
+    get:
+      tags: [Modelos e mídia]
+      summary: Lista os modelos da WABA (consultados na Meta)
+      description: "Escopo: templates:read"
+      operationId: listTemplates
+      parameters:
+        - { $ref: "#/components/parameters/PhoneNumberId" }
+        - { name: status, in: query, schema: { type: string, example: APPROVED } }
+      responses:
+        "200": { description: Lista no formato da Meta (name, status, language, category, components) }
+        "502": { $ref: "#/components/responses/MetaError" }
+
+  /whatsapp/{phone_number_id}/media:
+    post:
+      tags: [Modelos e mídia]
+      summary: Envia um arquivo para a Meta e retorna o media id
+      description: "Escopo: media:write"
+      operationId: uploadMedia
+      parameters: [{ $ref: "#/components/parameters/PhoneNumberId" }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties: { file: { type: string, format: binary } }
+      responses:
+        "201":
+          description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "502":
-          description: A Meta recusou a operação.
+                type: object
+                properties:
+                  data: { type: object, properties: { id: { type: string } } }
+                  test_mode: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /whatsapp/{phone_number_id}/media/{media_id}:
+    get:
+      tags: [Modelos e mídia]
+      summary: Baixa uma mídia recebida (stream)
+      description: "Escopo: media:read. O media_id chega no webhook message.received."
+      operationId: downloadMedia
+      parameters:
+        - { $ref: "#/components/parameters/PhoneNumberId" }
+        - { name: media_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Conteúdo binário com o Content-Type original
           content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "504":
-          description: Tempo esgotado aguardando a Meta.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "502": { $ref: "#/components/responses/MetaError" }
+
+  /conversations:
+    get:
+      tags: [Conversas]
+      summary: Lista conversas (plano api_chat)
+      description: "Escopo: conversations:read"
+      operationId: listConversations
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, resolved] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200": { description: OK }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /conversations/{conversation_id}/messages:
+    get:
+      tags: [Conversas]
+      summary: Mensagens de uma conversa (plano api_chat)
+      description: "Escopo: conversations:read"
+      operationId: conversationMessages
+      parameters:
+        - { name: conversation_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /usage:
     get:
       tags: [Uso]
-      summary: Métricas de uso da API
-      description: >-
-        Totais calculados sobre as 1000 requisições mais recentes da
-        organização. Escopo necessário: usage:read.
-      operationId: getUsage
+      summary: Contagens reais de requisições e mensagens
+      description: "Escopo: usage:read"
+      operationId: usage
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 90, default: 30 } }
       responses:
         "200":
-          description: Métricas agregadas.
+          description: OK
           content:
             application/json:
               schema:
@@ -195,161 +308,139 @@ paths:
                   data:
                     type: object
                     properties:
-                      total_requests:
-                        type: integer
-                      last_24h:
-                        type: integer
-                      by_endpoint:
-                        type: object
-                        additionalProperties:
-                          type: integer
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "429":
-          $ref: "#/components/responses/RateLimited"
-  /openapi.yaml:
-    get:
-      tags: [Conta]
-      summary: Esta especificação OpenAPI
-      description: Documento OpenAPI da API (acesso público, sem autenticação).
-      operationId: getOpenapiSpec
-      security: []
-      responses:
-        "200":
-          description: Especificação em YAML.
-          content:
-            application/yaml:
-              schema:
-                type: string
+                      period_days: { type: integer }
+                      api_requests: { type: integer }
+                      api_requests_24h: { type: integer }
+                      messages_sent: { type: integer }
+                      messages_received: { type: integer }
+                      messages_failed: { type: integer }
+
 components:
   securitySchemes:
-    ApiKeyAuth:
+    bearerAuth:
       type: http
       scheme: bearer
-      description: >-
-        Chave interna da plataforma no formato sk_test_... ou sk_live_...,
-        criada no painel da AutoZap. NÃO é um token da Meta — os tokens da
-        Meta nunca saem do servidor.
+      description: "Chave interna: Authorization: Bearer sk_live_... (ou sk_test_...)"
+  parameters:
+    PhoneNumberId:
+      name: phone_number_id
+      in: path
+      required: true
+      description: Phone Number ID da Meta de um número conectado à sua organização
+      schema: { type: string, pattern: "^[0-9]{5,25}$" }
   schemas:
     Channel:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        channel:
-          type: string
-          enum: [whatsapp]
-        phone_number_id:
-          type: string
-        display_phone_number:
-          type: string
-        verified_name:
-          type: string
-        status:
-          type: string
-          enum: [pending, active, error, disconnected]
-        connected_at:
-          type: string
-          format: date-time
-    SendMessageRequest:
+        id: { type: string, format: uuid }
+        channel: { type: string, enum: [whatsapp] }
+        connection_type: { type: string, enum: [embedded_signup, coexistence, manual] }
+        waba_id: { type: string }
+        phone_number_id: { type: string }
+        display_phone_number: { type: string }
+        verified_name: { type: string }
+        quality_rating: { type: string, nullable: true }
+        status: { type: string, enum: [pending, active, error] }
+        webhook_subscribed: { type: boolean }
+        connected_at: { type: string, format: date-time }
+    SendMessage:
       type: object
-      required: [to, type, text]
+      required: [to, type]
       properties:
-        to:
-          type: string
-          pattern: '^\+?\d{8,15}$'
-          description: Destinatário com código do país e DDD, só dígitos ("+" inicial opcional).
+        to: { type: string, description: "Número com código do país e DDD (8–15 dígitos)", example: "5511999998888" }
         type:
           type: string
-          enum: [text]
-          description: No MVP apenas mensagens de texto são suportadas.
+          enum: [text, template, image, video, audio, document, sticker, location, interactive, reaction, contacts]
         text:
           type: object
-          required: [body]
           properties:
-            body:
-              type: string
-              minLength: 1
-              maxLength: 4096
-    MetaSendMessageResponse:
+            body: { type: string, maxLength: 4096 }
+            preview_url: { type: boolean }
+        template:
+          type: object
+          properties:
+            name: { type: string }
+            language: { type: object, properties: { code: { type: string, example: pt_BR } } }
+            components: { type: array, items: { type: object } }
+        image: { $ref: "#/components/schemas/Media" }
+        video: { $ref: "#/components/schemas/Media" }
+        audio: { $ref: "#/components/schemas/Media" }
+        document: { $ref: "#/components/schemas/Media" }
+        sticker: { $ref: "#/components/schemas/Media" }
+        location:
+          type: object
+          properties:
+            latitude: { type: number }
+            longitude: { type: number }
+            name: { type: string }
+            address: { type: string }
+        interactive: { type: object, description: Objeto interactive da Cloud API (type + action) }
+        reaction:
+          type: object
+          properties:
+            message_id: { type: string }
+            emoji: { type: string }
+        contacts: { type: array, items: { type: object } }
+        context:
+          type: object
+          properties: { message_id: { type: string, description: wamid da mensagem citada } }
+        biz_opaque_callback_data: { type: string, maxLength: 512 }
+    Media:
       type: object
-      description: Resposta oficial da WhatsApp Cloud API.
+      description: Informe exatamente um entre id e link (HTTPS)
       properties:
-        messaging_product:
-          type: string
-          example: whatsapp
-        contacts:
-          type: array
-          items:
-            type: object
-            properties:
-              input:
-                type: string
-              wa_id:
-                type: string
-        messages:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-                description: wamid da mensagem enviada.
+        id: { type: string }
+        link: { type: string, format: uri }
+        caption: { type: string }
+        filename: { type: string }
+    Message:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        connection_id: { type: string, format: uuid }
+        conversation_id: { type: string, format: uuid, nullable: true }
+        direction: { type: string, enum: [inbound, outbound] }
+        wamid: { type: string, nullable: true }
+        contact_wa_id: { type: string }
+        type: { type: string }
+        content: { type: object, nullable: true }
+        status: { type: string, enum: [received, accepted, sent, delivered, read, failed, test] }
+        error: { type: object, nullable: true }
+        source: { type: string, enum: [api, dashboard, webhook] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     Error:
       type: object
       properties:
         error:
           type: object
           properties:
-            code:
-              type: string
-            message:
-              type: string
-            request_id:
-              type: string
-          required: [code, message, request_id]
+            code: { type: string }
+            message: { type: string }
+            request_id: { type: string }
+            field: { type: string }
+            meta_error:
+              type: object
+              description: Erro original da Meta (code, error_subcode, type, details, fbtrace_id)
   responses:
     BadRequest:
-      description: Requisição inválida (JSON malformado ou campos inválidos).
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            error:
-              code: invalid_recipient
-              message: "Destinatário inválido: use apenas dígitos (8 a 15), incluindo código do país e DDD."
-              request_id: "9f2c..."
+      description: Entrada inválida
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     Unauthorized:
-      description: Chave de API ausente ou inválida.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            error:
-              code: invalid_api_key
-              message: Chave de API inválida ou revogada.
-              request_id: "9f2c..."
+      description: Chave ausente, inválida, expirada ou revogada
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     Forbidden:
-      description: A chave não tem o escopo necessário.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            error:
-              code: insufficient_scope
-              message: A chave não tem o escopo necessário para esta operação.
-              request_id: "9f2c..."
+      description: Escopo ou plano insuficiente
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: Recurso inexistente nesta organização
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Conflict:
+      description: Idempotency-Key em uso ou número sem credencial válida
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     RateLimited:
-      description: Limite de requisições excedido (60/min por chave).
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-security:
-  - ApiKeyAuth: []
+      description: Limite por chave (desta API) ou limite da Meta
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    MetaError:
+      description: A Meta recusou (502) ou não respondeu a tempo (504)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }

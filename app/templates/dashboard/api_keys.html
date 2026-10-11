@@ -1,65 +1,74 @@
-{% extends "base.html" %}
-{% block title %}Chaves de API — AutoZap{% endblock %}
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Chaves de API — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>Chaves de API</h1>
-  <p>Crie e gerencie chaves para integração com sistemas externos</p>
+{% set can_admin = membership.role in ('owner', 'admin') %}
+<div class="page-head">
+  <div>
+    <h1>Chaves de API</h1>
+    <p>Credenciais para chamar a API do {{ app_name }}. Não são tokens da Meta.</p>
+  </div>
+  {% if can_admin %}<button class="btn btn-primary" type="button" data-open="keyDialog">{{ icon('plus') }} Nova chave</button>{% endif %}
 </div>
 
-{% if membership.role in ('owner','admin') %}
-<div class="card" style="margin-bottom:24px;">
-  <h2 style="margin-bottom:16px; font-size:1.1rem;">Nova chave</h2>
-  <form method="post" action="{{ url_for('dashboard.api_keys_create') }}" class="form-inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-group">
-      <label>Nome</label>
-      <input type="text" name="name" required maxlength="80" placeholder="Ex.: Integração n8n">
-    </div>
-    <div class="form-group">
-      <label>Ambiente</label>
-      <select name="environment">
-        <option value="test">Teste</option>
-        <option value="live">Produção</option>
-      </select>
-    </div>
-    <button type="submit" class="btn btn-primary">Criar chave</button>
-  </form>
-</div>
-{% endif %}
+<div class="alert alert-info">{{ icon('info') }}<div><strong><code>sk_test_</code></strong> valida tudo sem enviar à Meta (ideal para montar automações). <strong><code>sk_live_</code></strong> envia de verdade. Guardamos só um hash: se perder a chave, rotacione.</div></div>
 
 {% if keys %}
-<div class="table-container">
-  <table>
-    <thead><tr><th>Nome</th><th>Prefixo</th><th>Ambiente</th><th>Último uso</th><th>Ações</th></tr></thead>
-    <tbody>
-      {% for k in keys %}
-      <tr {% if k.revoked %}style="opacity:0.6"{% endif %}>
-        <td>{{ k.name }}</td>
-        <td><code style="color:var(--primary-light);">{{ k.key_hint }}</code></td>
-        <td><span class="badge badge-{{ k.environment }}">{{ k.environment }}</span></td>
-        <td>{{ k.last_used_at or "—" }}</td>
-        <td class="actions-cell">
-          {% if not k.revoked and membership.role in ('owner','admin') %}
-          <form method="post" action="{{ url_for('dashboard.api_keys_rotate', key_id=k.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm" data-confirm="Rotacionar esta chave? A atual será revogada.">Rotacionar</button>
-          </form>
-          <form method="post" action="{{ url_for('dashboard.api_keys_revoke', key_id=k.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-danger" data-confirm="Revogar esta chave? A ação não pode ser desfeita.">Revogar</button>
-          </form>
-          {% elif k.revoked %}
-          <span class="badge badge-revoked">Revogada</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+<div class="card card-flush"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Nome</th><th>Chave</th><th>Ambiente</th><th>Escopos</th><th>Último uso</th><th>Expira</th><th class="right">Ações</th></tr></thead>
+  <tbody>
+  {% for k in keys %}
+  <tr class="{% if k.revoked %}is-muted{% endif %}">
+    <td><strong>{{ k.name }}</strong><div class="small muted">criada {{ k.created_at|ago }}</div></td>
+    <td class="mono nowrap">{{ k.key_hint }}</td>
+    <td>{% if k.environment == 'live' %}<span class="badge badge-brand">Produção</span>{% else %}<span class="badge badge-warn">Teste</span>{% endif %}</td>
+    <td><span class="small" title="{{ k.scopes|join(', ') }}">{{ k.scopes|length }} escopo(s)</span></td>
+    <td class="nowrap">{{ k.last_used_at|ago if k.last_used_at else 'Nunca' }}</td>
+    <td class="nowrap">{{ k.expires_at|dt('%d/%m/%Y') if k.expires_at else 'Não expira' }}</td>
+    <td>
+      <div class="table-actions">
+      {% if k.revoked %}<span class="badge">Revogada</span>
+      {% elif can_admin %}
+        <form method="post" action="{{ url_for('dashboard.api_keys_rotate', key_id=k.id) }}" data-confirm="Gerar uma nova chave e revogar esta imediatamente? Atualize suas integrações em seguida.">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">{{ icon('refresh', 'icon-sm') }} Rotacionar</button></form>
+        <form method="post" action="{{ url_for('dashboard.api_keys_revoke', key_id=k.id) }}" data-confirm="Revogar a chave “{{ k.name }}”? Integrações que a usam vão parar na hora.">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-danger" type="submit">Revogar</button></form>
+      {% endif %}
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
 {% else %}
-<div class="card empty-state">
-  <p>Nenhuma chave criada ainda.</p>
-</div>
+<div class="card"><div class="empty">{{ icon('key') }}<h3>Nenhuma chave ainda</h3>
+  <p>Crie uma chave para enviar mensagens a partir do n8n, Make, Zapier ou do seu próprio sistema.</p>
+  {% if can_admin %}<button class="btn btn-primary" type="button" data-open="keyDialog">{{ icon('plus') }} Criar primeira chave</button>{% else %}<p class="hint">Peça a um administrador para criar uma chave.</p>{% endif %}
+</div></div>
+{% endif %}
+
+{% if can_admin %}
+<dialog class="modal" id="keyDialog" aria-labelledby="keyTitle" style="width:min(680px, calc(100vw - 32px))">
+  <form method="post" action="{{ url_for('dashboard.api_keys_create') }}" data-loading>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="modal-head"><h2 id="keyTitle">Nova chave de API</h2><button class="btn btn-ghost btn-icon" type="button" data-close aria-label="Fechar">{{ icon('x') }}</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label for="k_name">Nome</label><input id="k_name" name="name" required maxlength="80" placeholder="Ex.: Automação n8n"></div>
+        <div class="field"><label for="k_env">Ambiente</label><select id="k_env" name="environment"><option value="test">Teste (sk_test_)</option><option value="live">Produção (sk_live_)</option></select></div>
+        <div class="field"><label for="k_exp">Validade</label><select id="k_exp" name="expires_in"><option value="">Sem expiração</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option></select></div>
+      </div>
+      <fieldset style="border:0;padding:0;margin:0">
+        <legend class="label mb-1">Escopos</legend>
+        <div class="check-grid">
+          {% for key, label in scopes.items() %}
+          <label class="check-card"><input type="checkbox" name="scopes" value="{{ key }}" {% if key in default_scopes %}checked{% endif %}><div><strong>{{ key }}</strong><span>{{ label }}</span></div></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </div>
+    <div class="modal-foot"><button class="btn" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Criar chave</button></div>
+  </form>
+</dialog>
 {% endif %}
 {% endblock %}

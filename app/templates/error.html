@@ -1,19 +1,16 @@
-{% extends "base.html" %}
-{% block title %}Erro {{ status }} — AutoZap{% endblock %}
-{% if current_user %}
+{% extends "layouts/app.html" if (current_user and membership) else "layouts/public.html" %}
+{% block title %}{{ title }} — {{ app_name }}{% endblock %}
 {% block content %}
-<div style="text-align:center; padding:60px 20px;">
-  <h1 style="font-size:3rem; font-weight:700; color:var(--danger); margin-bottom:8px;">{{ status }}</h1>
-  <p style="color:var(--fg-muted); margin-bottom:24px;">{{ message }}</p>
-  <a class="btn btn-primary" href="{{ url_for('dashboard.overview') }}">Voltar ao painel</a>
+<div class="error-page">
+  <div>
+    <div class="error-code">{{ status }}</div>
+    <h1 class="mt-2">{{ title }}</h1>
+    <p class="muted">{{ message }}</p>
+    {% if g.request_id %}<p class="small muted">Código para suporte: <span class="mono">{{ g.request_id }}</span></p>{% endif %}
+    <div class="row" style="justify-content:center">
+      <a class="btn btn-primary" href="{{ url_for('dashboard.overview') if current_user else url_for('public.index') }}">{{ 'Voltar ao painel' if current_user else 'Ir para o início' }}</a>
+      <button type="button" class="btn" data-history-back>Voltar</button>
+    </div>
+  </div>
 </div>
 {% endblock %}
-{% else %}
-{% block auth_content %}
-<div style="text-align:center; padding:40px 20px;">
-  <h1 style="font-size:3rem; font-weight:700; color:var(--danger); margin-bottom:8px;">{{ status }}</h1>
-  <p style="color:var(--fg-muted); margin-bottom:24px;">{{ message }}</p>
-  <a class="btn btn-primary" href="{{ url_for('auth.login') }}">Voltar ao login</a>
-</div>
-{% endblock %}
-{% endif %}

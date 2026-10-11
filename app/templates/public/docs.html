@@ -1,0 +1,257 @@
+{% extends "layouts/public.html" %}
+{% block title %}Documentação da API — {{ app_name }}{% endblock %}
+{% block content %}
+{% set base = app_base_url ~ '/api/v1' %}
+<div class="wrap docs">
+  <nav class="docs-nav" aria-label="Seções da documentação">
+    <div class="group">Começo</div>
+    <a href="#inicio">Visão geral</a>
+    <a href="#autenticacao">Autenticação</a>
+    <a href="#teste">Modo de teste</a>
+    <a href="#erros">Erros e limites</a>
+    <a href="#idempotencia">Idempotência</a>
+    <div class="group">Endpoints</div>
+    <a href="#me">Conta</a>
+    <a href="#canais">Números</a>
+    <a href="#enviar">Enviar mensagem</a>
+    <a href="#tipos">Tipos de mensagem</a>
+    <a href="#lida">Marcar como lida</a>
+    <a href="#mensagens">Consultar mensagens</a>
+    <a href="#modelos">Modelos</a>
+    <a href="#midia">Mídia</a>
+    <a href="#conversas">Conversas</a>
+    <a href="#uso">Uso</a>
+    <div class="group">Webhooks</div>
+    <a href="#webhooks">Eventos</a>
+    <a href="#assinatura">Validar assinatura</a>
+    <a href="#n8n">Exemplo com n8n</a>
+  </nav>
+
+  <article class="docs-body">
+    <h2 id="inicio">Visão geral</h2>
+    <p>A API do {{ app_name }} é uma camada REST sobre a <strong>WhatsApp Cloud API oficial da Meta</strong>. Você chama a nossa API com uma chave interna; nós chamamos a Meta com o token do número conectado — que nunca é exposto.</p>
+    <dl class="kv">
+      <dt>URL base</dt><dd><code>{{ base }}</code></dd>
+      <dt>Formato</dt><dd>JSON (UTF-8). Datas em ISO 8601 (UTC).</dd>
+      <dt>Especificação</dt><dd><a href="{{ url_for('api_v1.openapi_spec') }}">OpenAPI 3 (YAML)</a></dd>
+    </dl>
+    <div class="alert alert-info mt-2"><div>O formato dos objetos de mensagem segue a documentação oficial da Cloud API. Recursos que dependem de aprovação da Meta (modelos, limites de envio, verificação do negócio) continuam sujeitos às regras dela.</div></div>
+
+    <h2 id="autenticacao">Autenticação</h2>
+    <p>Crie uma chave em <em>Painel → Chaves de API</em> e envie-a no cabeçalho <code>Authorization</code>. A chave completa aparece uma única vez; guardamos apenas um hash.</p>
+<pre><code>Authorization: Bearer sk_live_SUA_CHAVE</code></pre>
+    <p>Cada chave tem <strong>escopos</strong>. Uma chamada sem o escopo necessário retorna <code>403 insufficient_scope</code>.</p>
+    <div class="table-wrap card card-flush"><table class="table">
+      <thead><tr><th>Escopo</th><th>Permite</th></tr></thead>
+      <tbody>{% for key, label in scopes.items() %}<tr><td><code>{{ key }}</code></td><td>{{ label }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+
+    <h2 id="teste">Modo de teste</h2>
+    <p>Chaves <code>sk_test_</code> passam por toda a validação, mas <strong>não chamam a Meta</strong>: a resposta traz <code>"test_mode": true</code> e um id <code>wamid.TEST…</code>. Use-as para montar fluxos sem gastar mensagens. Para enviar de verdade, use uma chave <code>sk_live_</code>.</p>
+
+    <h2 id="erros">Erros e limites</h2>
+    <p>Todo erro segue o mesmo envelope. Informe o <code>request_id</code> ao suporte.</p>
+<pre><code>{
+  "error": {
+    "code": "meta_api_error",
+    "message": "A Meta recusou a operação.",
+    "request_id": "6f1c…",
+    "meta_error": { "code": 131047, "message": "Re-engagement message", "fbtrace_id": "A…" }
+  }
+}</code></pre>
+    <div class="table-wrap card card-flush"><table class="table">
+      <thead><tr><th>HTTP</th><th>Código</th><th>Quando</th></tr></thead>
+      <tbody>
+        <tr><td>400</td><td><code>validation_error</code>, <code>invalid_recipient</code>…</td><td>Corpo inválido. O campo com problema vem em <code>field</code>.</td></tr>
+        <tr><td>401</td><td><code>missing_api_key</code>, <code>invalid_api_key</code></td><td>Chave ausente, inválida, expirada ou revogada.</td></tr>
+        <tr><td>403</td><td><code>insufficient_scope</code>, <code>plan_required</code></td><td>Escopo ou plano insuficiente.</td></tr>
+        <tr><td>404</td><td><code>channel_not_found</code></td><td>O número não existe nesta conta ou não está ativo.</td></tr>
+        <tr><td>409</td><td><code>idempotency_conflict</code>, <code>channel_unavailable</code></td><td>Requisição repetida em andamento, ou número sem credencial válida.</td></tr>
+        <tr><td>429</td><td><code>rate_limited</code>, <code>meta_api_error</code></td><td>Limite desta API (por chave) ou limite da Meta.</td></tr>
+        <tr><td>502</td><td><code>meta_api_error</code></td><td>A Meta recusou. Detalhes originais em <code>meta_error</code>.</td></tr>
+        <tr><td>504</td><td><code>meta_timeout</code></td><td>A Meta não respondeu a tempo.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="mt-2">Limite padrão: <strong>120 requisições por minuto por chave</strong> (configurável pelo operador da plataforma). Os limites de mensagens da Meta (por número e por qualidade) se aplicam à parte.</p>
+
+    <h2 id="idempotencia">Idempotência</h2>
+    <p>Envie <code>Idempotency-Key</code> (8–128 caracteres, único por mensagem) para repetir com segurança após um erro de rede ou timeout. Se a mesma chave chegar de novo, devolvemos a resposta original com <code>Idempotent-Replayed: true</code> — a mensagem não é reenviada.</p>
+
+    <h2 id="me">Conta</h2>
+    <div class="endpoint"><span class="method get">GET</span>/me</div>
+    <p>Retorna a organização, o plano e os dados da chave usada.</p>
+
+    <h2 id="canais">Números</h2>
+    <div class="endpoint"><span class="method get">GET</span>/channels</div>
+    <div class="endpoint"><span class="method get">GET</span>/channels/{phone_number_id}</div>
+    <p>Lista os números ativos. Use o <code>phone_number_id</code> nos demais endpoints.</p>
+<pre><code>{ "data": [ { "phone_number_id": "1234567890", "display_phone_number": "+55 11 4000-0000",
+  "verified_name": "Minha Empresa", "quality_rating": "GREEN", "status": "active" } ] }</code></pre>
+
+    <h2 id="enviar">Enviar mensagem</h2>
+    <div class="endpoint"><span class="method post">POST</span>/whatsapp/{phone_number_id}/messages</div>
+    <p>Escopo <code>messages:send</code>. Responde <code>201</code> quando a Meta aceita a mensagem; o status final (entregue, lida, falhou) chega por webhook.</p>
+<pre><code>curl -X POST {{ base }}/whatsapp/PHONE_NUMBER_ID/messages \
+  -H "Authorization: Bearer sk_test_SUBSTITUA_PELA_SUA_CHAVE" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: pedido-1234-aviso" \
+  -d '{"to": "5511999998888", "type": "text", "text": {"body": "Mensagem de teste"}}'</code></pre>
+<pre><code># Python
+import requests
+r = requests.post(
+    "{{ base }}/whatsapp/PHONE_NUMBER_ID/messages",
+    headers={"Authorization": "Bearer sk_live_SUA_CHAVE"},
+    json={"to": "5511999998888", "type": "text", "text": {"body": "Olá!"}},
+    timeout=30,
+)
+print(r.status_code, r.json())</code></pre>
+<pre><code>// Node.js (18+)
+const r = await fetch("{{ base }}/whatsapp/PHONE_NUMBER_ID/messages", {
+  method: "POST",
+  headers: { Authorization: "Bearer sk_live_SUA_CHAVE", "Content-Type": "application/json" },
+  body: JSON.stringify({ to: "5511999998888", type: "text", text: { body: "Olá!" } }),
+});
+console.log(r.status, await r.json());</code></pre>
+    <p>Resposta:</p>
+<pre><code>{
+  "data": {
+    "id": "0b0d…",               // id interno da mensagem
+    "wamid": "wamid.HBgM…",      // id da Meta (aparece nos webhooks de status)
+    "status": "accepted",
+    "type": "text",
+    "contact_wa_id": "5511999998888",
+    "meta_response": { "messaging_product": "whatsapp", "contacts": [...], "messages": [...] }
+  },
+  "test_mode": false,
+  "request_id": "…"
+}</code></pre>
+    <div class="alert alert-warning"><div><strong>Janela de 24 horas.</strong> Mensagens livres (texto, mídia…) só podem ser enviadas até 24h após a última mensagem do cliente. Fora disso, use um <a href="#modelos">modelo aprovado</a> (<code>type: "template"</code>). Respeite o consentimento (opt-in) do destinatário e as políticas do WhatsApp Business.</div></div>
+
+    <h2 id="tipos">Tipos de mensagem</h2>
+    <p>O corpo segue o objeto de mensagem da Cloud API — sem <code>messaging_product</code>, que nós adicionamos. Exemplos:</p>
+<pre><code>// Modelo aprovado com variáveis
+{ "to": "5511999998888", "type": "template",
+  "template": { "name": "pedido_enviado", "language": { "code": "pt_BR" },
+    "components": [ { "type": "body", "parameters": [ { "type": "text", "text": "Ana" } ] } ] } }
+
+// Imagem por link (ou por "id" de mídia enviada em /media)
+{ "to": "5511999998888", "type": "image",
+  "image": { "link": "https://exemplo.com/foto.jpg", "caption": "Seu produto" } }
+
+// Documento
+{ "to": "5511999998888", "type": "document",
+  "document": { "link": "https://exemplo.com/boleto.pdf", "filename": "boleto.pdf" } }
+
+// Botões de resposta
+{ "to": "5511999998888", "type": "interactive",
+  "interactive": { "type": "button", "body": { "text": "Confirma o horário?" },
+    "action": { "buttons": [
+      { "type": "reply", "reply": { "id": "sim", "title": "Sim" } },
+      { "type": "reply", "reply": { "id": "nao", "title": "Não" } } ] } } }
+
+// Localização
+{ "to": "5511999998888", "type": "location",
+  "location": { "latitude": -23.561, "longitude": -46.656, "name": "Loja Paulista" } }
+
+// Reação a uma mensagem recebida
+{ "to": "5511999998888", "type": "reaction",
+  "reaction": { "message_id": "wamid.HBgM…", "emoji": "👍" } }
+
+// Responder citando uma mensagem
+{ "to": "5511999998888", "type": "text", "text": { "body": "Claro!" },
+  "context": { "message_id": "wamid.HBgM…" } }</code></pre>
+    <p>Tipos aceitos: <code>text</code>, <code>template</code>, <code>image</code>, <code>video</code>, <code>audio</code>, <code>document</code>, <code>sticker</code>, <code>location</code>, <code>interactive</code>, <code>reaction</code>, <code>contacts</code>.</p>
+
+    <h2 id="lida">Marcar como lida</h2>
+    <div class="endpoint"><span class="method post">POST</span>/whatsapp/{phone_number_id}/messages/read</div>
+<pre><code>{ "message_id": "wamid.HBgM…" }</code></pre>
+
+    <h2 id="mensagens">Consultar mensagens</h2>
+    <div class="endpoint"><span class="method get">GET</span>/messages?phone_number_id=&amp;direction=inbound|outbound&amp;contact=&amp;limit=50&amp;before=</div>
+    <div class="endpoint"><span class="method get">GET</span>/messages/{id ou wamid}</div>
+    <p>Escopo <code>messages:read</code>. Retorna status de entrega e erros. O campo <code>content</code> só é preenchido no plano API + Chat (no plano API o conteúdo não é armazenado; você o recebe no webhook). Para paginar, envie <code>before</code> = <code>next_before</code> da página anterior.</p>
+
+    <h2 id="modelos">Modelos</h2>
+    <div class="endpoint"><span class="method get">GET</span>/whatsapp/{phone_number_id}/templates?status=APPROVED</div>
+    <p>Lista os modelos da conta do WhatsApp (WABA) diretamente na Meta. Modelos são criados no painel (página do número) ou no WhatsApp Manager e passam por análise da Meta.</p>
+
+    <h2 id="midia">Mídia</h2>
+    <div class="endpoint"><span class="method post">POST</span>/whatsapp/{phone_number_id}/media</div>
+    <p>Upload <code>multipart/form-data</code> com o arquivo no campo <code>file</code>. Retorna <code>{"data": {"id": "…"}}</code> para usar em <code>image.id</code>, <code>document.id</code> etc.</p>
+<pre><code>curl -X POST {{ base }}/whatsapp/PHONE_NUMBER_ID/media \
+  -H "Authorization: Bearer sk_live_SUA_CHAVE" -F "file=@foto.jpg;type=image/jpeg"</code></pre>
+    <div class="endpoint"><span class="method get">GET</span>/whatsapp/{phone_number_id}/media/{media_id}</div>
+    <p>Baixa (stream) uma mídia recebida — o <code>media_id</code> chega no webhook <code>message.received</code>. A Meta mantém mídias recebidas por tempo limitado; baixe e guarde no seu sistema se precisar.</p>
+
+    <h2 id="conversas">Conversas (plano API + Chat)</h2>
+    <div class="endpoint"><span class="method get">GET</span>/conversations?status=open|resolved</div>
+    <div class="endpoint"><span class="method get">GET</span>/conversations/{id}/messages</div>
+    <p>Escopo <code>conversations:read</code>. Inclui <code>window_open</code> (janela de 24h aberta).</p>
+
+    <h2 id="uso">Uso</h2>
+    <div class="endpoint"><span class="method get">GET</span>/usage?days=30</div>
+    <p>Contagens reais de requisições e mensagens no período. A cobrança das conversas/mensagens é feita pela Meta diretamente na conta do WhatsApp do negócio.</p>
+
+    <h2 id="webhooks">Webhooks — eventos</h2>
+    <p>Cadastre uma URL HTTPS em <em>Painel → Webhooks</em> e escolha os eventos. Enviamos um <code>POST</code> JSON; responda com qualquer <code>2xx</code> em até 10 s. Falhas são repetidas com espera crescente (2, 4, 8… minutos) até 6 tentativas.</p>
+    <div class="table-wrap card card-flush"><table class="table">
+      <thead><tr><th>Evento</th><th>Descrição</th></tr></thead>
+      <tbody>{% for key, label in events.items() %}<tr><td><code>{{ key }}</code></td><td>{{ label }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+<pre><code>POST https://seu-sistema.com/webhook
+X-Webhook-Id: 9b2e…            (id da entrega — use para deduplicar)
+X-Webhook-Event: message.received
+X-Webhook-Timestamp: 1767225600
+X-Webhook-Signature: sha256=5d1c…
+
+{
+  "id": "9b2e…",
+  "event": "message.received",
+  "created_at": "2026-10-10T13:00:00+00:00",
+  "data": {
+    "phone_number_id": "1234567890",
+    "contact": { "wa_id": "5511999998888", "name": "Ana" },
+    "message": { "id": "wamid.HBgM…", "from": "5511999998888", "timestamp": "1767225600",
+                 "type": "text", "text": { "body": "Olá!" } }
+  }
+}</code></pre>
+
+    <h2 id="assinatura">Validar a assinatura</h2>
+    <p>Calcule <code>HMAC-SHA256(segredo, timestamp + "." + corpo_bruto)</code> e compare com o cabeçalho em tempo constante. Rejeite timestamps com mais de 5 minutos para evitar replay. O segredo <code>whsec_…</code> aparece uma vez ao criar o webhook.</p>
+<pre><code># Python (Flask)
+import hashlib, hmac, time
+from flask import request, abort
+
+SECRET = "whsec_SEU_SEGREDO"
+
+def verificar():
+    ts = request.headers.get("X-Webhook-Timestamp", "")
+    assinatura = request.headers.get("X-Webhook-Signature", "")
+    if not ts.isdigit() or abs(time.time() - int(ts)) > 300:
+        abort(400)
+    esperado = "sha256=" + hmac.new(SECRET.encode(), ts.encode() + b"." + request.get_data(),
+                                    hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(esperado, assinatura):
+        abort(401)</code></pre>
+<pre><code>// Node.js (Express com express.raw({ type: "application/json" }))
+const crypto = require("crypto");
+function verificar(req) {
+  const ts = req.get("X-Webhook-Timestamp");
+  const esperado = "sha256=" + crypto.createHmac("sha256", process.env.WEBHOOK_SECRET)
+    .update(ts + "." + req.body).digest("hex");
+  const recebido = req.get("X-Webhook-Signature") || "";
+  return Math.abs(Date.now() / 1000 - Number(ts)) < 300 &&
+    recebido.length === esperado.length &&
+    crypto.timingSafeEqual(Buffer.from(esperado), Buffer.from(recebido));
+}</code></pre>
+
+    <h2 id="n8n">Exemplo com n8n</h2>
+    <ol class="steps">
+      <li>Crie um nó <strong>Webhook</strong> (método POST) e copie a URL de produção.</li>
+      <li>No painel, cadastre essa URL em <em>Webhooks</em> com o evento <code>message.received</code>.</li>
+      <li>Processe <code>{{ '{{' }} $json.body.data.message.text.body {{ '}}' }}</code> (texto recebido) e o remetente em <code>data.contact.wa_id</code>.</li>
+      <li>Para responder, use um nó <strong>HTTP Request</strong>: POST para <code>{{ base }}/whatsapp/PHONE_NUMBER_ID/messages</code>, cabeçalho <code>Authorization: Bearer sk_live_…</code> e corpo JSON como nos exemplos acima.</li>
+    </ol>
+  </article>
+</div>
+{% endblock %}

@@ -1,6 +1,6 @@
 """Autenticação da API pública por chave interna (sk_test_/sk_live_).
 
-Rate limit por chave (60 req/min): o decorador do Flask-Limiter é aplicado
+Rate limit por chave (API_RATE_LIMIT_PER_KEY, padrão 120/min): o decorador do Flask-Limiter é aplicado
 DIRETAMENTE na view e a verificação de autenticação acontece no wrapper
 externo, que só então chama a view limitada. Assim o key_func já encontra
 ``g.api_key`` preenchido; sem chave válida, cai para o IP como chave. Essa
@@ -12,14 +12,16 @@ from __future__ import annotations
 import functools
 from typing import Any, Callable
 
-from flask import g, request
+from flask import current_app, g, request
 from flask_limiter.util import get_remote_address
 
 from app.api import error_response
 from app.extensions import limiter
 from app.services.api_keys import verify_api_key
 
-RATE_LIMIT_PER_KEY = "60 per minute"
+
+def _rate_limit_value() -> str:
+    return current_app.config.get("API_RATE_LIMIT_PER_KEY", "120 per minute")
 
 
 def _rate_limit_key() -> str:
@@ -34,7 +36,7 @@ def require_api_key(*required_scopes: str) -> Callable:
     organização da requisição vem SOMENTE da chave validada.
     """
     def decorator(view: Callable) -> Callable:
-        limited_view = limiter.limit(RATE_LIMIT_PER_KEY, key_func=_rate_limit_key)(view)
+        limited_view = limiter.limit(_rate_limit_value, key_func=_rate_limit_key)(view)
 
         @functools.wraps(view)
         def wrapper(*args: Any, **kwargs: Any):
@@ -53,6 +55,7 @@ def require_api_key(*required_scopes: str) -> Callable:
                 )
             g.api_key = record
             g.organization_id = record["organization_id"]
+            g.test_mode = record.get("environment") == "test"
 
             granted = record.get("scopes") or []
             missing = [s for s in required_scopes if s not in granted]

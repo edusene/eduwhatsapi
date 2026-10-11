@@ -1,13 +1,13 @@
 # Blueprint do Render — provisiona o Web Service. Sem segredos aqui:
-# as variáveis sensíveis são marcadas com sync: false e devem ser definidas
-# no painel do Render (Environment > Environment Variables).
+# variáveis com "sync: false" devem ser preenchidas no painel do Render
+# (Environment > Environment Variables). Veja docs/deployment-render.md.
 services:
   - type: web
     name: autozap
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app --workers 2 --threads 4 --timeout 60 --access-logfile - --error-logfile -
+    startCommand: gunicorn wsgi:app --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
@@ -19,6 +19,8 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: APP_BASE_URL
+        sync: false
+      - key: SUPPORT_EMAIL
         sync: false
       - key: SECRET_KEY
         generateValue: true
@@ -34,23 +36,23 @@ services:
         sync: false
       - key: META_GRAPH_API_VERSION
         value: v26.0
-      - key: META_REDIRECT_URI
+      - key: META_ES_CONFIG_ID
         sync: false
       - key: META_WEBHOOK_VERIFY_TOKEN
-        sync: false
+        generateValue: true
       - key: META_WEBHOOK_APP_SECRET
         sync: false
       - key: TOKEN_ENCRYPTION_KEY
-        sync: false
+        sync: false   # precisa ser uma chave Fernet (veja .env.example); generateValue não serve
       - key: API_KEY_PEPPER
+        generateValue: true
+      - key: CRON_SECRET
         generateValue: true
       - key: CORS_ORIGINS
         sync: false
       - key: RATE_LIMIT_STORAGE_URI
         value: memory://
-      - key: OUTBOUND_WEBHOOK_TIMEOUT
-        value: "10"
-      - key: OUTBOUND_WEBHOOK_MAX_ATTEMPTS
-        value: "5"
+      - key: BACKGROUND_WORKER_ENABLED
+        value: "true"
       - key: OUTBOUND_WEBHOOK_ALLOW_INSECURE
         value: "false"

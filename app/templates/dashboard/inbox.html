@@ -1,0 +1,97 @@
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Conversas — {{ app_name }}{% endblock %}
+{% block main %}
+<main class="content-wide" id="conteudo">
+  <div class="inbox" id="inbox"
+       data-api="{{ url_for('dashboard.inbox') }}/api"
+       data-media="{{ url_for('dashboard.inbox') }}/media"
+       data-can-send="{{ 'true' if can_send else 'false' }}"
+       data-user="{{ user_id }}">
+    <aside class="inbox-list" aria-label="Lista de conversas">
+      <div class="inbox-list-head">
+        <div class="row-between">
+          <h1>Conversas</h1>
+          {% if can_send %}<button class="btn btn-sm btn-primary" type="button" data-open="newDialog" {% if not channels %}disabled title="Conecte um número ativo primeiro"{% endif %}>{{ icon('plus', 'icon-sm') }} Nova</button>{% endif %}
+        </div>
+        <div class="search">{{ icon('search', 'icon-sm') }}<label class="sr-only" for="convSearch">Buscar conversa</label>
+          <input class="input" id="convSearch" type="search" placeholder="Buscar por nome ou número"></div>
+        <div class="inbox-filters" role="group" aria-label="Filtrar conversas">
+          <button type="button" data-filter="open" class="active">Abertas</button>
+          <button type="button" data-filter="mine">Minhas</button>
+          <button type="button" data-filter="resolved">Resolvidas</button>
+        </div>
+      </div>
+      <div class="conv-list" id="convList" aria-live="polite">
+        <div class="empty">Carregando…</div>
+      </div>
+    </aside>
+
+    <section class="chat-empty" id="chatEmpty">
+      <div>
+        {{ icon('chat') }}
+        <h2 class="mt-2">Selecione uma conversa</h2>
+        <p>As mensagens recebidas pelos seus números aparecem aqui automaticamente.</p>
+        {% if not channels %}<a class="btn btn-primary" href="{{ url_for('dashboard.channels') }}">Conectar um número</a>{% endif %}
+      </div>
+    </section>
+
+    <section class="chat" id="chat" hidden aria-label="Conversa">
+      <header class="chat-head">
+        <button class="btn btn-ghost btn-icon chat-back" type="button" id="chatBack" aria-label="Voltar para a lista">{{ icon('arrow-left') }}</button>
+        <div class="avatar" id="chatAvatar">?</div>
+        <div class="who"><strong id="chatName"></strong><span id="chatSub"></span></div>
+        {% if can_send %}
+        <button class="btn btn-sm" type="button" id="assignBtn">Assumir</button>
+        <button class="btn btn-sm" type="button" id="resolveBtn">{{ icon('check', 'icon-sm') }} Resolver</button>
+        {% endif %}
+      </header>
+      <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+      {% if can_send %}
+      <footer class="chat-composer">
+        <div class="window-note" id="windowNote" hidden>{{ icon('clock', 'icon-sm') }}
+          <span class="grow">A janela de 24h está fechada. Envie um modelo aprovado para retomar a conversa.</span>
+          <button class="btn btn-sm" type="button" id="openTemplate">Escolher modelo</button></div>
+        <form class="composer-row" id="composer" autocomplete="off">
+          <button class="btn btn-ghost btn-icon" type="button" id="composerTemplate" title="Enviar modelo" aria-label="Enviar modelo">{{ icon('template') }}</button>
+          <label class="sr-only" for="composerText">Mensagem</label>
+          <textarea id="composerText" rows="1" maxlength="4096" placeholder="Digite uma mensagem (Enter envia, Shift+Enter quebra linha)"></textarea>
+          <button class="btn btn-primary" type="submit" aria-label="Enviar">{{ icon('send') }}</button>
+        </form>
+      </footer>
+      {% else %}
+      <footer class="chat-composer"><p class="small muted mb-0">Seu papel permite apenas visualizar conversas.</p></footer>
+      {% endif %}
+    </section>
+  </div>
+</main>
+
+{% if can_send %}
+<dialog class="modal" id="templateDialog" aria-labelledby="tplDlgTitle">
+  <div class="modal-head"><h2 id="tplDlgTitle">Enviar modelo</h2><button class="btn btn-ghost btn-icon" type="button" data-close aria-label="Fechar">{{ icon('x') }}</button></div>
+  <div class="modal-body">
+    <div class="tpl-list" id="tplList"><div class="muted">Carregando modelos…</div></div>
+    <div id="tplParams"></div>
+    <div class="alert alert-error" id="tplError" hidden>{{ icon('error') }}<div id="tplErrorText"></div></div>
+  </div>
+  <div class="modal-foot"><button class="btn" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="button" id="tplSend" disabled>Enviar modelo</button></div>
+</dialog>
+
+<dialog class="modal" id="newDialog" aria-labelledby="newTitle">
+  <div class="modal-head"><h2 id="newTitle">Nova conversa</h2><button class="btn btn-ghost btn-icon" type="button" data-close aria-label="Fechar">{{ icon('x') }}</button></div>
+  <div class="modal-body">
+    <p class="small muted">Conversas iniciadas pela empresa precisam começar com um modelo aprovado e exigem consentimento prévio do contato.</p>
+    <div class="form-grid">
+      <div class="field"><label for="newChannel">Número de origem</label>
+        <select id="newChannel">{% for c in channels %}<option value="{{ c.id }}">{{ c.display_phone_number or c.phone_number_id }}{% if c.verified_name %} — {{ c.verified_name }}{% endif %}</option>{% endfor %}</select></div>
+      <div class="field"><label for="newTo">Contato</label><input id="newTo" inputmode="tel" placeholder="5511999998888"></div>
+    </div>
+    <div class="tpl-list" id="newTplList"><div class="muted">Carregando modelos…</div></div>
+    <div id="newTplParams"></div>
+    <div class="alert alert-error" id="newError" hidden>{{ icon('error') }}<div id="newErrorText"></div></div>
+  </div>
+  <div class="modal-foot"><button class="btn" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="button" id="newSend" disabled>Iniciar conversa</button></div>
+</dialog>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/inbox.js') }}" defer></script>{% endblock %}

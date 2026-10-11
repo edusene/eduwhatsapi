@@ -14,6 +14,7 @@ conftest, `app.extensions["supabase_service_override"]` e/ou
 from __future__ import annotations
 
 from flask import current_app, g
+
 from supabase import Client, create_client
 
 

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block body_class %}app-body{% endblock %}
+{% block body %}
+{% macro nav_link(endpoint, label, ic, extra='', also=()) -%}
+<a href="{{ url_for(endpoint) }}" class="{% if request.endpoint == endpoint or request.endpoint in also %}active{% endif %}"{% if request.endpoint == endpoint %} aria-current="page"{% endif %}>{{ icon(ic) }}<span>{{ label }}</span>{{ extra|safe }}</a>
+{%- endmacro %}
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Navegação principal">
+    <div class="sidebar-brand">
+      <a href="{{ url_for('dashboard.overview') }}" aria-label="{{ app_name }} — início">
+        <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="{{ app_name }}" width="150" height="30">
+      </a>
+    </div>
+    {% if memberships|length > 1 %}
+    <form class="org-switch" method="post" action="{{ url_for('auth.switch_org') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="sr-only" for="orgSwitch">Organização</label>
+      <select id="orgSwitch" name="organization_id" data-autosubmit>
+        {% for m in memberships %}
+        <option value="{{ m.organization_id }}" {% if membership and m.organization_id == membership.organization_id %}selected{% endif %}>{{ m.org_name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    {% elif membership %}
+    <div class="org-switch"><div class="org-pill"><span>{{ membership.org_name }}</span>
+      <span class="badge {% if membership.plan == 'api_chat' %}badge-brand{% endif %}">{{ 'API + Chat' if membership.plan == 'api_chat' else 'API' }}</span></div></div>
+    {% endif %}
+    <nav class="nav">
+      {{ nav_link('dashboard.overview', 'Visão geral', 'home') }}
+      {{ nav_link('dashboard.inbox', 'Conversas', 'chat', '' if membership and membership.plan == 'api_chat' else '<span class="pill">Chat</span>') }}
+      {{ nav_link('dashboard.channels', 'Números', 'phone', also=('dashboard.channel_detail',)) }}
+      <div class="nav-group">Desenvolvedores</div>
+      {{ nav_link('dashboard.api_keys_list', 'Chaves de API', 'key') }}
+      {{ nav_link('dashboard.webhooks', 'Webhooks', 'webhook') }}
+      {{ nav_link('dashboard.logs', 'Logs', 'activity') }}
+      <a href="{{ url_for('public.docs') }}" target="_blank" rel="noopener">{{ icon('book') }}<span>Documentação</span>{{ icon('external', 'icon-sm') }}</a>
+      <div class="nav-group">Conta</div>
+      {{ nav_link('dashboard.settings', 'Configurações', 'settings') }}
+    </nav>
+    <div class="sidebar-foot">
+      <div class="user-chip">
+        <div class="avatar" aria-hidden="true">{{ (current_user.email or '?')[:1]|upper }}</div>
+        <div class="who"><div title="{{ current_user.email }}">{{ current_user.email }}</div>
+          <span>{{ {'owner':'Proprietário','admin':'Administrador','developer':'Desenvolvedor','viewer':'Leitura'}.get(membership.role, '') if membership else '' }}</span></div>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-ghost btn-icon btn-sm" title="Sair" aria-label="Sair da conta">{{ icon('logout') }}</button>
+        </form>
+      </div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" id="menuToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="sidebar">{{ icon('menu') }}</button>
+      <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="{{ app_name }}" width="130" height="26">
+    </header>
+    {% block main %}
+    <main class="content" id="conteudo">
+      {% block content %}{% endblock %}
+    </main>
+    {% endblock %}
+  </div>
+</div>
+{% endblock %}

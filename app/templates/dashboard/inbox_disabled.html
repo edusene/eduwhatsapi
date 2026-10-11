@@ -1,0 +1,23 @@
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Conversas — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Conversas</h1><p>Caixa de entrada para a sua equipe atender pelo navegador.</p></div></div>
+<section class="card" style="max-width:760px">
+  <div class="empty" style="text-align:left;padding:8px">
+    <span class="badge badge-brand mb-2">Plano API + Chat</span>
+    <h3 class="mt-2">Sua empresa está no plano API Oficial</h3>
+    <p style="margin:0 0 16px">Nesse plano usamos só metadados das mensagens e repassamos o conteúdo ao seu webhook. Ative o plano <strong>API + Chat</strong> para guardar o histórico e atender pela caixa de entrada.</p>
+    <ul class="checklist mb-2">
+      <li><span class="check-dot">{{ icon('check', 'icon-sm') }}</span><div>Conversas em tempo real, com fotos, áudios e documentos</div></li>
+      <li><span class="check-dot">{{ icon('check', 'icon-sm') }}</span><div>Envio de modelos e controle da janela de 24h</div></li>
+      <li><span class="check-dot">{{ icon('check', 'icon-sm') }}</span><div>Atribuição de conversas entre membros da equipe</div></li>
+    </ul>
+    {% if membership.role == 'owner' %}
+    <a class="btn btn-primary" href="{{ url_for('dashboard.settings') }}">Ativar nas configurações</a>
+    {% else %}
+    <p class="hint">Peça ao proprietário da conta para ativar o plano.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

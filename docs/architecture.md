@@ -1,35 +1,63 @@
 # Arquitetura
 
-## Visão geral
+```
+Navegador (painel, chat) ──sessão + CSRF──┐
+Sistemas do cliente (n8n, Make…) ──sk_*──┤
+                                          ▼
+                              Flask (Gunicorn no Render)
+   app/public     landing, /docs, páginas legais
+   app/auth       Supabase Auth (cadastro, login, confirmação, convites)
+   app/dashboard  overview, números, chat, chaves, webhooks, logs, configurações
+   app/api        REST /api/v1 (chaves internas, escopos, idempotência)
+   app/meta       connect.py (Embedded Signup/manual) · webhooks.py (entrada)
+                  graph_api.py (HTTP) · whatsapp.py (adaptador) · adapters.py (registro)
+   app/services   regras de negócio (connections, messaging, outbound_webhooks,
+                  organizations, api_keys, idempotency, usage, tasks, maintenance…)
+   app/internal   /internal/cron/* para agendadores externos
+          │                         │
+          ▼                         ▼
+   Supabase (Postgres + Auth)    Meta Graph API / WhatsApp Cloud API
+```
 
-AutoZap é uma plataforma SaaS multi-tenant que conecta ativos autorizados da Meta (inicialmente WhatsApp Cloud API) e os disponibiliza para clientes por meio de uma API própria, chaves internas, webhooks e painel administrativo.
+## Decisões
 
-## Camadas
+- **Multi-tenant por organização.** O `organization_id` vem sempre do servidor: da sessão
+  (associação em `organization_members`) ou da chave de API validada. Toda consulta filtra por
+  ele; recursos de outra organização respondem 404. RLS no banco é defesa em profundidade.
+- **Dois planos.** `api` guarda só metadados das mensagens (o conteúdo vai para o webhook do
+  cliente); `api_chat` guarda conteúdo para a caixa de entrada, com retenção configurável.
+- **Adaptadores de canal.** `get_adapter("whatsapp")` isola a Cloud API. Instagram/Messenger
+  entram como novos adaptadores quando houver permissões aprovadas — sem mexer nas rotas.
+- **Entrada da Meta rápida e idempotente.** Assinatura validada no corpo bruto → evento
+  registrado em `webhook_events` com `dedupe_key` único → processamento leve → webhooks de
+  saída despachados em thread. Reenvios da Meta são ignorados pelo índice único.
+- **Saída confiável sem fila externa.** Cada entrega é uma linha em `webhook_deliveries`
+  (criada travada por 2 min). Uma thread entrega na hora; falhas recebem `next_retry_at` com
+  backoff (2, 4, 8… até 120 min, 6 tentativas). Um worker por processo (e/ou cron externo)
+  reivindica as vencidas com `FOR UPDATE SKIP LOCKED` (`claim_due_webhook_deliveries`), seguro
+  com vários workers. Se o processo cair, a trava expira e a entrega é retomada.
+- **Idempotência de envio por reserva.** `Idempotency-Key` é inserida como `processing` ANTES
+  de chamar a Meta (índice único). Repetições concorrentes recebem 409; concluídas recebem a
+  resposta salva; falhas liberam a chave. POSTs à Meta nunca são repetidos automaticamente.
+- **Chat por polling.** A caixa de entrada consulta endpoints JSON a cada 3–6 s. Funciona em
+  qualquer hospedagem, sem WebSocket; pode ser trocado por Supabase Realtime no futuro.
+- **Modo de teste.** Chaves `sk_test_` percorrem toda a validação e gravam a mensagem com
+  status `test`, sem chamar a Meta — claramente sinalizado na resposta.
 
-1. **Frontend** — HTML semântico, CSS responsivo e JavaScript vanilla. Jinja2 no servidor. Sem frameworks pesados.
-2. **Backend Flask** — autenticação por sessão (Supabase Auth), autorização por papel, CSRF, rate limiting, headers de segurança.
-3. **Banco de dados** — PostgreSQL no Supabase com RLS (Row Level Security). O backend usa a service role key e SEMPRE filtra por `organization_id` validado no servidor.
-4. **Adaptadores Meta** — `MetaGraphClient` genérico + `WhatsAppAdapter` específico. Registro de canais desacoplado (`CHANNEL_ADAPTERS`) para Instagram/Messenger futuros.
-5. **Webhooks**
-   - **Entrada**: endpoint público `/webhooks/meta` com verificação de challenge e assinatura HMAC-SHA256 (`X-Hub-Signature-256`).
-   - **Saída**: entregas para URLs HTTPS dos clientes com assinatura HMAC, proteção anti-SSRF, retries com backoff e log sanitizado.
-6. **API pública v1** — autenticação por chaves internas (`sk_test_` / `sk_live_`), rate limit por chave, idempotência para envio de mensagens, logs sanitizados.
+## Modelo de dados (resumo)
 
-## Fluxo de uma mensagem
+`organizations` (plan, retenção) · `organization_members` (papéis) · `organization_invitations` ·
+`meta_connections` (token criptografado, tipo de conexão, saúde) · `api_keys` (hash) ·
+`contacts` · `conversations` (janela de 24h, não lidas, atribuição) · `messages` (status de
+entrega, conteúdo opcional) · `webhook_endpoints` (segredo criptografado) · `webhook_deliveries` ·
+`webhook_events` (dedupe) · `idempotency_keys` · `api_request_logs` · `audit_logs`.
+Detalhes e políticas RLS em `supabase/schema.sql`.
 
-1. Cliente autentica com chave interna (`Authorization: Bearer sk_...`).
-2. Backend valida chave, organização e escopos.
-3. Busca conexão ativa do WhatsApp para a org.
-4. Descriptografa o token da Meta (Fernet).
-5. Encaminha para `https://graph.facebook.com/{version}/{phone_number_id}/messages`.
-6. Retorna a resposta da Meta ao cliente + `request_id`.
-7. Registra métricas sanitizadas em `api_request_logs`.
+## Papéis
 
-## Segurança em camadas
-
-- Cookies `HttpOnly`, `Secure` em produção, `SameSite=Lax`.
-- CSRF em todas as operações de sessão (exceto API e webhooks públicos).
-- RLS no Supabase como defesa em profundidade.
-- Tokens da Meta criptografados em repouso (Fernet).
-- Chaves internas armazenadas apenas como hash HMAC-SHA256 + pepper.
-- Rate limiting por IP (login) e por chave (API).
+| Papel | Pode |
+|---|---|
+| owner | Tudo, incluindo plano, retenção, apagar mensagens e gerenciar administradores |
+| admin | Conectar/desconectar números, chaves, webhooks, modelos, convidar membros |
+| developer | Enviar mensagens (chat/testes), testar e reenviar webhooks, revalidar números |
+| viewer | Somente leitura (painel e conversas) |

@@ -1,56 +1,113 @@
-{% extends "base.html" %}
-{% block title %}Configurações — AutoZap{% endblock %}
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Configurações — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>Configurações</h1>
-  <p>Gerencie sua organização e conta</p>
-</div>
+{% set is_owner = membership.role == 'owner' %}
+{% set can_admin = membership.role in ('owner', 'admin') %}
+<div class="page-head"><div><h1>Configurações</h1><p>Empresa, plano, equipe e privacidade.</p></div></div>
 
-<div class="card" style="margin-bottom:24px;">
-  <h2 style="margin-bottom:16px; font-size:1.1rem;">Organização</h2>
-  <p style="color:var(--fg-muted); margin-bottom:16px;">
-    <strong>Nome:</strong> {{ org.name }}<br>
-    <strong>Slug:</strong> {{ org.slug }}
-  </p>
-  {% if current_role == 'owner' %}
-  <form method="post" action="{{ url_for('dashboard.settings_rename') }}" class="form-inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-group">
-      <label>Novo nome</label>
-      <input type="text" name="name" value="{{ org.name }}" required maxlength="120">
-    </div>
-    <button type="submit" class="btn btn-primary">Salvar</button>
-  </form>
-  {% endif %}
-</div>
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-header"><div><h2>Empresa e plano</h2><p>Somente o proprietário pode alterar.</p></div></div>
+      <form method="post" action="{{ url_for('dashboard.settings_update') }}" data-loading>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field"><label for="s_name">Nome da empresa</label><input id="s_name" name="name" value="{{ org.name }}" required maxlength="120" {% if not is_owner %}disabled{% endif %}></div>
+        <fieldset style="border:0;padding:0;margin:0 0 16px">
+          <legend class="label mb-1">Plano</legend>
+          <div class="plan-picker">
+            {% for key, plan in plans.items() %}
+            <label class="plan-option"><input type="radio" name="plan" value="{{ key }}" {% if org.plan == key %}checked{% endif %} {% if not is_owner %}disabled{% endif %}>
+              <strong>{{ plan.label }}</strong><span>{{ plan.description }}</span></label>
+            {% endfor %}
+          </div>
+          <span class="hint">No plano API o conteúdo das mensagens não é armazenado (só metadados). Ao mudar para API + Chat, o histórico começa a partir da mudança.</span>
+        </fieldset>
+        <div class="field"><label for="s_ret">Retenção de mensagens (dias)</label>
+          <input id="s_ret" type="number" min="1" max="3650" name="message_retention_days" value="{{ org.message_retention_days or 90 }}" {% if not is_owner %}disabled{% endif %}>
+          <span class="hint">Mensagens mais antigas são apagadas pela rotina de limpeza (LGPD: guarde só o necessário).</span></div>
+        {% if is_owner %}<button class="btn btn-primary" type="submit">Salvar</button>{% endif %}
+      </form>
+    </section>
 
-<div class="card" style="margin-bottom:24px;">
-  <h2 style="margin-bottom:16px; font-size:1.1rem;">Documentos legais</h2>
-  <p style="color:var(--fg-muted); margin-bottom:16px;">Links públicos exigidos pelo app da Meta e pela plataforma.</p>
-  <div style="display:flex; flex-direction:column; gap:12px;">
-    <a href="{{ url_for('auth.termos') }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="justify-content:flex-start;">
-      Termos de Serviço
-    </a>
-    <a href="{{ url_for('auth.privacidade') }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="justify-content:flex-start;">
-      Política de Privacidade
-    </a>
-  </div>
-</div>
-
-<div class="card">
-  <h2 style="margin-bottom:16px; font-size:1.1rem;">Membros</h2>
-  <div class="table-container">
-    <table>
-      <thead><tr><th>Usuário</th><th>Papel</th></tr></thead>
-      <tbody>
+    <section class="card card-flush">
+      <div class="card-header"><div><h2>Equipe</h2><p>Papéis: proprietário e administrador gerenciam tudo; desenvolvedor usa API, chat e testes; leitura apenas visualiza.</p></div>
+        {% if can_admin %}<button class="btn btn-sm" type="button" data-open="inviteDialog">{{ icon('plus', 'icon-sm') }} Convidar</button>{% endif %}</div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Membro</th><th>Papel</th><th>Desde</th><th class="right"></th></tr></thead>
+        <tbody>
         {% for m in members %}
         <tr>
-          <td><code style="font-size:0.85rem;">{{ m.user_id[:8] }}…</code></td>
-          <td><span class="badge badge-role">{{ m.role }}</span></td>
+          <td><div class="row"><div class="avatar">{{ (m.email or '?')[:1]|upper }}</div><div>{{ m.email or 'E-mail não informado' }}{% if m.user_id == current_user.id %} <span class="badge">você</span>{% endif %}</div></div></td>
+          <td>
+            {% if can_admin and m.role != 'owner' and m.user_id != current_user.id and (is_owner or m.role not in ('admin',)) %}
+            <form method="post" action="{{ url_for('dashboard.member_role', member_id=m.id) }}" class="row">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="sr-only" for="role-{{ m.id }}">Papel</label>
+              <select class="select" style="width:auto;min-height:32px;padding:4px 8px" id="role-{{ m.id }}" name="role" data-autosubmit>
+                {% for r in ('admin', 'developer', 'viewer') if is_owner or r != 'admin' %}<option value="{{ r }}" {% if m.role == r %}selected{% endif %}>{{ role_labels[r] }}</option>{% endfor %}
+              </select>
+            </form>
+            {% else %}<span class="badge {% if m.role == 'owner' %}badge-brand{% endif %}">{{ role_labels.get(m.role, m.role) }}</span>{% endif %}
+          </td>
+          <td class="nowrap small muted">{{ m.created_at|dt('%d/%m/%Y') }}</td>
+          <td><div class="table-actions">{% if can_admin and m.role != 'owner' and m.user_id != current_user.id and (is_owner or m.role != 'admin') %}
+            <form method="post" action="{{ url_for('dashboard.member_remove', member_id=m.id) }}" data-confirm="Remover {{ m.email or 'este membro' }} da equipe?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-danger" type="submit">Remover</button></form>
+          {% endif %}</div></td>
         </tr>
         {% endfor %}
-      </tbody>
-    </table>
+        {% for inv in invitations %}
+        <tr class="is-muted">
+          <td><div class="row"><div class="avatar">{{ icon('mail', 'icon-sm') }}</div><div>{{ inv.email }} <span class="badge badge-warn">convite pendente</span></div></div></td>
+          <td>{{ role_labels.get(inv.role, inv.role) }}</td>
+          <td class="small muted">expira {{ inv.expires_at|dt('%d/%m') }}</td>
+          <td><div class="table-actions"><form method="post" action="{{ url_for('dashboard.invitation_revoke', invitation_id=inv.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Cancelar</button></form></div></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Documentos legais</h2>
+      <p class="small muted">Links públicos exigidos no cadastro do app na Meta. São modelos editáveis — revise com um advogado.</p>
+      <div class="stack">
+        <a class="btn" href="{{ legal_terms_url }}" target="_blank" rel="noopener">{{ icon('file') }} Termos de Uso {{ icon('external', 'icon-sm') }}</a>
+        <a class="btn" href="{{ legal_privacy_url }}" target="_blank" rel="noopener">{{ icon('shield') }} Política de Privacidade {{ icon('external', 'icon-sm') }}</a>
+      </div>
+    </section>
+    {% if is_owner %}
+    <section class="card" style="border-color:color-mix(in srgb, var(--danger) 35%, var(--border))">
+      <h2>Apagar mensagens</h2>
+      <p class="small muted">Remove permanentemente todas as mensagens, conversas e contatos desta empresa (ex.: atender um pedido de exclusão de titular). Números, chaves e webhooks continuam.</p>
+      <form method="post" action="{{ url_for('dashboard.purge_messages') }}" data-confirm="Apagar TODAS as mensagens e conversas? Esta ação não pode ser desfeita.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field"><label for="purge">Digite APAGAR para confirmar</label><input id="purge" name="confirm" required pattern="APAGAR" autocomplete="off"></div>
+        <button class="btn btn-danger-solid" type="submit">{{ icon('trash') }} Apagar mensagens</button>
+      </form>
+    </section>
+    {% endif %}
   </div>
 </div>
+
+{% if can_admin %}
+<dialog class="modal" id="inviteDialog" aria-labelledby="invTitle">
+  <form method="post" action="{{ url_for('dashboard.invitation_create') }}" data-loading>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="modal-head"><h2 id="invTitle">Convidar membro</h2><button class="btn btn-ghost btn-icon" type="button" data-close aria-label="Fechar">{{ icon('x') }}</button></div>
+    <div class="modal-body">
+      <div class="field"><label for="i_email">E-mail</label><input id="i_email" type="email" name="email" required placeholder="pessoa@empresa.com"></div>
+      <div class="field"><label for="i_role">Papel</label><select id="i_role" name="role">
+        <option value="developer">Desenvolvedor — API, chat e testes</option>
+        <option value="viewer">Leitura — apenas visualiza</option>
+        {% if is_owner %}<option value="admin">Administrador — gerencia tudo</option>{% endif %}
+      </select></div>
+      <p class="hint">Geramos um link de convite válido por 7 dias para você enviar à pessoa. Ela precisa entrar com o mesmo e-mail.</p>
+    </div>
+    <div class="modal-foot"><button class="btn" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Gerar convite</button></div>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}

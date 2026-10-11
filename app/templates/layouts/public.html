@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block body_class %}public-body{% endblock %}
+{% block body %}
+<header class="site-header">
+  <div class="wrap">
+    <a href="{{ url_for('public.index') }}" aria-label="{{ app_name }} — início"><img src="{{ url_for('static', filename='img/logo.svg') }}" alt="{{ app_name }}" width="150" height="30"></a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="{{ url_for('public.index') }}#planos">Planos</a>
+      <a href="{{ url_for('public.index') }}#recursos">Recursos</a>
+      <a href="{{ url_for('public.docs') }}">Documentação</a>
+      {% if current_user %}
+      <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.overview') }}">Abrir painel</a>
+      {% else %}
+      <a href="{{ url_for('auth.login') }}">Entrar</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">Criar conta</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
+<main id="conteudo">{% block content %}{% endblock %}</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="disclaimer">
+      <strong>{{ app_name }}</strong> © {{ now.year }}. Integra-se às APIs oficiais da Meta (WhatsApp Business Platform / Cloud API).
+      Não é um produto da Meta. WhatsApp e Meta são marcas de seus respectivos titulares.
+    </div>
+    <nav aria-label="Rodapé">
+      <a href="{{ url_for('public.docs') }}">Documentação</a>
+      <a href="{{ url_for('public.termos') }}">Termos de Uso</a>
+      <a href="{{ url_for('public.privacidade') }}">Privacidade</a>
+      {% if support_email %}<span>{{ support_email }}</span>{% endif %}
+    </nav>
+  </div>
+</footer>
+{% endblock %}

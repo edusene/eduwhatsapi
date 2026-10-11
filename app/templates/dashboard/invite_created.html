@@ -1,0 +1,11 @@
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Convite criado — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Convite criado</h1><p>Para {{ inv.email }} · {{ {'admin':'Administrador','developer':'Desenvolvedor','viewer':'Leitura'}.get(inv.role) }}</p></div></div>
+<section class="card" style="max-width:760px">
+  <div class="alert alert-warning">{{ icon('lock') }}<div>Copie e envie este link à pessoa convidada (e-mail, WhatsApp…). Ele vale por 7 dias, funciona uma única vez e não será exibido novamente.</div></div>
+  <div class="secret"><code id="inviteLink">{{ app_base_url }}{{ link }}</code><button class="btn btn-sm" type="button" data-copy="#inviteLink">{{ icon('copy', 'icon-sm') }} Copiar</button></div>
+  <a class="btn btn-primary" href="{{ url_for('dashboard.settings') }}">Concluir</a>
+</section>
+{% endblock %}

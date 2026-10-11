@@ -1,43 +1,123 @@
-{% extends "base.html" %}
-{% block title %}Visão geral — AutoZap{% endblock %}
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Visão geral — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>Visão geral</h1>
-  <p>Resumo da sua conta e atividade recente</p>
-</div>
-<div class="grid grid-3">
-  <div class="card">
-    <div class="card-title">Canais ativos</div>
-    <div class="card-value">{{ active_conns }}</div>
+<div class="page-head">
+  <div>
+    <h1>Olá{% if membership %}, {{ membership.org_name }}{% endif %}</h1>
+    <p>Resumo dos últimos 30 dias, calculado a partir dos seus registros.</p>
   </div>
-  <div class="card">
-    <div class="card-title">Chaves ativas</div>
-    <div class="card-value">{{ active_keys }}</div>
-  </div>
-  <div class="card">
-    <div class="card-title">Requisições 24h</div>
-    <div class="card-value">{{ logs_24h }}</div>
+  <div class="row">
+    <a class="btn" href="{{ url_for('public.docs') }}" target="_blank" rel="noopener">{{ icon('book') }} Documentação</a>
+    <a class="btn btn-primary" href="{{ url_for('dashboard.channels') }}">{{ icon('plus') }} Conectar número</a>
   </div>
 </div>
-<h2 style="margin-top:32px; margin-bottom:12px;">Eventos recentes</h2>
-{% if recent_events %}
-<div class="table-container">
-  <table>
-    <thead><tr><th>Horário</th><th>Evento</th><th>Status</th></tr></thead>
-    <tbody>
-      {% for ev in recent_events %}
-      <tr>
-        <td>{{ ev.received_at }}</td>
-        <td>{{ ev.event_type }}</td>
-        <td><span class="badge badge-{{ ev.status }}">{{ ev.status }}</span></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<div class="card empty-state">
-  <p>Nenhum evento recente.</p>
-</div>
+
+{% if checklist_done < checklist|length %}
+<section class="card mb-3" aria-labelledby="onb-title">
+  <div class="card-header">
+    <div>
+      <h2 id="onb-title">Primeiros passos</h2>
+      <p>{{ checklist_done }} de {{ checklist|length }} concluídos</p>
+    </div>
+  </div>
+  <div class="progress mb-2" role="progressbar" aria-valuemin="0" aria-valuemax="{{ checklist|length }}" aria-valuenow="{{ checklist_done }}"><span style="width: {{ (checklist_done / checklist|length * 100)|round }}%"></span></div>
+  <ul class="checklist">
+    {% for item in checklist %}
+    <li class="{% if item.done %}done{% endif %}">
+      <span class="check-dot">{% if item.done %}{{ icon('check', 'icon-sm') }}{% endif %}</span>
+      <div class="grow">
+        <div class="check-title">{{ item.title }}</div>
+        <p>{{ item.text }}</p>
+      </div>
+      {% if not item.done %}<a class="btn btn-sm" href="{{ item.url }}">{{ item.cta }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
 {% endif %}
+
+<div class="grid grid-4">
+  <div class="card stat">
+    <div class="stat-label">{{ icon('phone', 'icon-sm') }} Números ativos</div>
+    <div class="stat-value">{{ connections|selectattr('status', 'equalto', 'active')|list|length }}</div>
+    <div class="stat-sub">{{ connections|length }} conectado(s) no total</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">{{ icon('send', 'icon-sm') }} Mensagens enviadas</div>
+    <div class="stat-value">{{ stats.messages_sent|num }}</div>
+    <div class="stat-sub">{{ stats.messages_failed|num }} com falha</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">{{ icon('inbox', 'icon-sm') }} Mensagens recebidas</div>
+    <div class="stat-value">{{ stats.messages_received|num }}</div>
+    <div class="stat-sub">nos últimos 30 dias</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">{{ icon('code', 'icon-sm') }} Requisições à API</div>
+    <div class="stat-value">{{ stats.api_requests|num }}</div>
+    <div class="stat-sub">{{ stats.api_requests_24h|num }} nas últimas 24h · {{ active_keys }} chave(s) ativa(s)</div>
+  </div>
+</div>
+
+<div class="split mt-3">
+  <section class="card" aria-labelledby="chart-title">
+    <div class="card-header">
+      <div><h2 id="chart-title">Mensagens por dia</h2><p>Últimos 14 dias (horário UTC)</p></div>
+    </div>
+    {% set ymax = daily_max %}
+    {% set step = ((ymax / 4)|round(0, 'ceil'))|int or 1 %}
+    {% set top = step * 4 %}
+    <div class="chart" data-chart>
+      <div class="chart-legend">
+        <span><i style="background:var(--series-1)"></i>Recebidas</span>
+        <span><i style="background:var(--series-2)"></i>Enviadas</span>
+      </div>
+      <div class="chart-plot">
+        <div class="chart-yaxis" aria-hidden="true">
+          {% for i in range(4, -1, -1) %}<span>{{ (step * i)|num }}</span>{% endfor %}
+        </div>
+        <div class="chart-area">
+          <div class="chart-bars" role="img" aria-label="Gráfico de mensagens recebidas e enviadas por dia. Os valores estão na tabela abaixo.">
+            {% for d in daily %}
+            <div class="chart-col" tabindex="0" data-date="{{ d.date[8:10] }}/{{ d.date[5:7] }}" data-in="{{ d.inbound }}" data-out="{{ d.outbound }}">
+              {% if d.outbound %}<span class="chart-seg" style="height: {{ (d.outbound / top * 100)|round(2) }}%; background: var(--series-2)"></span>{% endif %}
+              {% if d.inbound %}<span class="chart-seg" style="height: {{ (d.inbound / top * 100)|round(2) }}%; background: var(--series-1)"></span>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          <div class="chart-xaxis" aria-hidden="true">
+            {% for d in daily %}<span>{% if loop.index0 % 2 == 0 or loop.last %}{{ d.date[8:10] }}/{{ d.date[5:7] }}{% endif %}</span>{% endfor %}
+          </div>
+        </div>
+      </div>
+      <details class="data-table">
+        <summary>Ver dados em tabela</summary>
+        <div class="table-wrap mt-1"><table class="table">
+          <thead><tr><th>Dia</th><th class="num">Recebidas</th><th class="num">Enviadas</th></tr></thead>
+          <tbody>{% for d in daily %}<tr><td>{{ d.date[8:10] }}/{{ d.date[5:7] }}</td><td class="num">{{ d.inbound|num }}</td><td class="num">{{ d.outbound|num }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </details>
+    </div>
+  </section>
+
+  <section class="card card-flush" aria-labelledby="events-title">
+    <div class="card-header"><div><h2 id="events-title">Eventos recentes</h2><p>Recebidos da Meta</p></div>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.logs', tab='events') }}">Ver todos</a></div>
+    {% if recent_events %}
+    <div class="table-wrap"><table class="table">
+      <tbody>
+        {% for ev in recent_events %}
+        <tr>
+          <td><code>{{ ev.event_type }}</code></td>
+          <td class="right muted small nowrap">{{ ev.received_at|ago }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+    <div class="empty">{{ icon('activity') }}<p>Nenhum evento ainda. Eles aparecem quando clientes enviam mensagens ou quando a Meta atualiza o status de um envio.</p></div>
+    {% endif %}
+  </section>
+</div>
 {% endblock %}

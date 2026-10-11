@@ -1,0 +1,36 @@
+{% from "_icons.html" import icon %}
+{% set can_admin = membership.role in ('owner', 'admin') %}
+<div class="grid grid-3">
+  <div class="option-card">
+    <div class="icon-tile">{{ icon('shield') }}</div>
+    <h3>Cadastro oficial da Meta</h3>
+    <p>O cliente autoriza pela janela da Meta (Embedded Signup) e escolhe o número. Recomendado para novos números.</p>
+    {% if es_enabled %}
+    <button class="btn btn-primary btn-block" type="button" data-es-start="standard" {% if not can_admin %}disabled{% endif %}>Conectar pela Meta</button>
+    {% else %}
+    <button class="btn btn-block" type="button" disabled>Indisponível</button>
+    <p class="hint">Requer <code>META_APP_ID</code>, <code>META_APP_SECRET</code> e <code>META_ES_CONFIG_ID</code>, e app aprovado como Tech Provider. Veja <code>docs/meta-setup.md</code>.</p>
+    {% endif %}
+  </div>
+  <div class="option-card">
+    <div class="icon-tile">{{ icon('phone') }}</div>
+    <h3>Coexistência</h3>
+    <p>Mantém o número no app WhatsApp Business do celular e também na API. Histórico e contatos são sincronizados pela Meta.</p>
+    {% if es_enabled %}
+    <button class="btn btn-block" type="button" data-es-start="coexistence" {% if not can_admin %}disabled{% endif %}>Conectar com coexistência</button>
+    {% else %}
+    <button class="btn btn-block" type="button" disabled>Indisponível</button>
+    <p class="hint">Usa a mesma configuração do Embedded Signup.</p>
+    {% endif %}
+  </div>
+  <div class="option-card">
+    <div class="icon-tile">{{ icon('key') }}</div>
+    <h3>Token de System User</h3>
+    <p>Para quem já tem a WABA configurada no Gerenciador de Negócios. Informe o token e os IDs.</p>
+    <button class="btn btn-block" type="button" data-open="manualDialog" {% if not can_admin %}disabled{% endif %}>Conectar com token</button>
+  </div>
+</div>
+{% if not can_admin %}<p class="hint mt-2">Somente proprietários e administradores podem conectar números.</p>{% endif %}
+{% if not webhook_configured %}
+<div class="alert alert-warning mt-2">{{ icon('alert') }}<div>O webhook global da Meta não está configurado no servidor (<code>META_WEBHOOK_VERIFY_TOKEN</code> / <code>META_WEBHOOK_APP_SECRET</code>). Você consegue enviar mensagens, mas não receberá respostas nem status de entrega até configurá-lo.</div></div>
+{% endif %}

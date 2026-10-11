@@ -1,69 +1,45 @@
 # API pública v1
 
-A especificação completa está em `docs/openapi.yaml` (OpenAPI 3.0.3), servida publicamente em `/api/v1/openapi.yaml`.
+A referência completa, com exemplos em curl, Python, Node.js e n8n, está na própria
+aplicação em **`/docs`** e na especificação **OpenAPI** em `docs/openapi.yaml`
+(servida em `/api/v1/openapi.yaml`).
 
-## Autenticação
+## Resumo dos endpoints
 
-Todas as requisições (exceto `/openapi.yaml`) devem incluir:
+| Método | Rota | Escopo |
+|---|---|---|
+| GET | `/api/v1/me` | — |
+| GET | `/api/v1/channels` · `/channels/{phone_number_id}` | `channels:read` |
+| POST | `/api/v1/whatsapp/{phone_number_id}/messages` | `messages:send` |
+| POST | `/api/v1/whatsapp/{phone_number_id}/messages/read` | `messages:send` |
+| GET | `/api/v1/messages` · `/messages/{id ou wamid}` | `messages:read` |
+| GET | `/api/v1/whatsapp/{phone_number_id}/templates` | `templates:read` |
+| POST | `/api/v1/whatsapp/{phone_number_id}/media` | `media:write` |
+| GET | `/api/v1/whatsapp/{phone_number_id}/media/{media_id}` | `media:read` |
+| GET | `/api/v1/conversations` · `/conversations/{id}/messages` | `conversations:read` (plano API + Chat) |
+| GET | `/api/v1/usage` | `usage:read` |
 
-```
-Authorization: Bearer sk_test_SUA_CHAVE
-```
+Rotas que **não** são da API pública: `/webhooks/meta` (entrada da Meta),
+`/connect/meta/*` (painel, sessão + CSRF), `/internal/cron/*` (agendador, `CRON_SECRET`).
 
-> `sk_test_...` e `sk_live_...` são chaves internas da plataforma, NÃO tokens da Meta.
-
-## Endpoints principais
-
-- `GET /api/v1/me` — retorna organização, ambiente e escopos da chave usada.
-- `GET /api/v1/channels` — lista canais conectados da organização (dados sanitizados).
-- `POST /api/v1/whatsapp/{phone_number_id}/messages` — envia mensagem de texto.
-- `GET /api/v1/usage` — métricas de uso da API nos últimos registros.
-
-## Exemplo: envio de mensagem
+## Exemplo mínimo
 
 ```bash
-curl -X POST https://SEU-DOMINIO.onrender.com/api/v1/whatsapp/123456789012345/messages \
+curl -X POST https://SEU-DOMINIO/api/v1/whatsapp/PHONE_NUMBER_ID/messages \
   -H "Authorization: Bearer sk_test_SUBSTITUA_PELA_SUA_CHAVE" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: idem-123456" \
-  -d '{
-    "to": "5511999999999",
-    "type": "text",
-    "text": {"body": "Mensagem de teste"}
-  }'
+  -H "Idempotency-Key: pedido-123-aviso" \
+  -d '{"to": "55DDDNUMERO", "type": "text", "text": {"body": "Mensagem de teste"}}'
 ```
 
-Resposta de sucesso (200):
-```json
-{
-  "data": {
-    "messages": [{"id": "wamid.XXX"}]
-  },
-  "request_id": "..."
-}
-```
+Com `sk_test_` nada é enviado à Meta. Para enviar de verdade, use `sk_live_` e um número
+ativo, respeitando a janela de 24h e o consentimento do destinatário.
 
-## Idempotência
+## Webhooks de saída
 
-Inclua o header `Idempotency-Key` (8–128 caracteres). A resposta da primeira requisição bem-sucedida é armazenada e reutilizada em chamadas subsequentes com a mesma chave + endpoint + organização.
+Eventos: `message.received`, `message.status.updated`, `message.sent`, `channel.connected`,
+`channel.disconnected`, `template.status.updated`, `api.request.failed` (e `test`).
 
-## Erros
-
-Formato padronizado:
-```json
-{
-  "error": {
-    "code": "invalid_recipient",
-    "message": "...",
-    "request_id": "..."
-  }
-}
-```
-
-Códigos comuns:
-- `missing_api_key` / `invalid_api_key` (401)
-- `insufficient_scope` (403)
-- `invalid_json`, `invalid_recipient`, `unsupported_message_type` (400)
-- `channel_not_found` (404)
-- `meta_api_error` (502)
-- `gateway_timeout` (504)
+Cabeçalhos: `X-Webhook-Id`, `X-Webhook-Event`, `X-Webhook-Timestamp`,
+`X-Webhook-Signature: sha256=HMAC_SHA256(segredo, "<timestamp>.<corpo>")`.
+Responda 2xx em até 10 s; falhas são repetidas com backoff (até 6 tentativas).

@@ -1,129 +1,225 @@
-"""Webhook público da Meta (entrada): verificação e eventos do WhatsApp.
+"""Webhooks públicos da Meta (entrada).
 
-- ``GET /webhooks/meta``: handshake oficial (hub.mode/hub.verify_token/challenge).
-- ``POST /webhooks/meta``: valida X-Hub-Signature-256 (HMAC do corpo bruto),
-  persiste eventos deduplicados em webhook_events e dispara os webhooks de
-  saída dos clientes. Processamento é inline e leve (apenas insert + entregas);
-  responde sempre 200 ao final para a Meta não reenviar.
+Duas URLs:
 
-Payloads armazenados são mínimos: IDs, remetente, timestamps e tipo — NUNCA o
-corpo do texto das mensagens.
+- ``/webhooks/meta`` — app Meta da PLATAFORMA (Embedded Signup e números
+  inscritos no seu app). Verify token: META_WEBHOOK_VERIFY_TOKEN; assinatura
+  com META_WEBHOOK_APP_SECRET (App Secret do seu app).
+- ``/webhooks/meta/<connection_id>`` — app Meta PRÓPRIO do cliente (conexão
+  manual com App Secret informado). Verify token e App Secret da conexão.
+
+Fluxo do POST: assinatura X-Hub-Signature-256 validada sobre o corpo BRUTO
+antes de qualquer processamento → payload validado → cada evento deduplicado
+em ``webhook_events`` (dedupe_key único) → processamento leve no banco →
+webhooks de saída despachados em segundo plano. Responde 200 rapidamente.
+Payloads gravados em webhook_events são mínimos (ids, tipo, horário) — nunca
+o texto das mensagens.
 """
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, abort, current_app, jsonify, request
 
-from app.services import outbound_webhooks
-from app.services.security import constant_time_equals, hmac_sha256_hex
+from app.services import connections, messaging, outbound_webhooks
+from app.services.security import constant_time_equals, verify_meta_signature
 from app.services.supabase_client import get_service_client
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("meta_webhooks", __name__)
 
+_UUID_LEN = 36
+
 
 def _text(message: str, status: int) -> Response:
     return Response(message, status=status, mimetype="text/plain")
 
 
-@bp.get("/webhooks/meta")
-def verify():
-    verify_token = current_app.config.get("META_WEBHOOK_VERIFY_TOKEN", "")
-    if not verify_token:
-        return _text("Webhook da Meta não configurado no servidor.", 503)
-    if (
-        request.args.get("hub.mode") == "subscribe"
-        and constant_time_equals(request.args.get("hub.verify_token", ""), verify_token)
-    ):
+def _handshake(expected_token: str | None) -> Response:
+    if not expected_token:
+        return _text("Webhook não configurado.", 503)
+    if request.args.get("hub.mode") == "subscribe" and constant_time_equals(
+            request.args.get("hub.verify_token", ""), expected_token):
         return _text(request.args.get("hub.challenge", ""), 200)
     return _text("Verificação falhou.", 403)
 
 
+def _connection_or_404(connection_id: str) -> dict[str, Any]:
+    if len(connection_id) != _UUID_LEN:
+        abort(404)
+    rows = (
+        get_service_client().table("meta_connections").select("*")
+        .eq("id", connection_id).neq("status", "disconnected").limit(1).execute().data
+    )
+    if not rows or not rows[0].get("app_secret_encrypted"):
+        abort(404)
+    return rows[0]
+
+
+@bp.get("/webhooks/meta")
+def verify():
+    return _handshake(current_app.config.get("META_WEBHOOK_VERIFY_TOKEN"))
+
+
+@bp.get("/webhooks/meta/<connection_id>")
+def verify_connection(connection_id: str):
+    return _handshake(connections.webhook_verify_token(_connection_or_404(connection_id)))
+
+
 @bp.post("/webhooks/meta")
 def receive():
-    app_secret = current_app.config.get("META_WEBHOOK_APP_SECRET", "")
-    if not app_secret:
-        return _text("Webhook da Meta não configurado no servidor.", 503)
-
-    signature = request.headers.get("X-Hub-Signature-256", "")
-    expected = "sha256=" + hmac_sha256_hex(app_secret, request.get_data())
-    if not signature.startswith("sha256=") or not constant_time_equals(signature, expected):
+    secret = current_app.config.get("META_WEBHOOK_APP_SECRET", "")
+    if not secret:
+        return _text("Webhook não configurado.", 503)
+    if not verify_meta_signature(secret, request.get_data(cache=True),
+                                 request.headers.get("X-Hub-Signature-256", "")):
+        logger.warning("Webhook da Meta com assinatura inválida (request_id=%s).", request.headers.get("X-Request-Id"))
         return _text("Assinatura inválida.", 403)
+    return _process_body(only_connection=None)
 
+
+@bp.post("/webhooks/meta/<connection_id>")
+def receive_connection(connection_id: str):
+    connection = _connection_or_404(connection_id)
+    secret = connections.app_secret_for(connection)
+    if not secret or not verify_meta_signature(secret, request.get_data(cache=True),
+                                               request.headers.get("X-Hub-Signature-256", "")):
+        return _text("Assinatura inválida.", 403)
+    return _process_body(only_connection=connection)
+
+
+# ---------------------------------------------------------------------------
+# Processamento
+# ---------------------------------------------------------------------------
+def _process_body(only_connection: dict[str, Any] | None):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return _text("Payload JSON inválido.", 400)
     if data.get("object") != "whatsapp_business_account":
-        return jsonify({"status": "ok"}), 200  # objeto não relacionado: ignora
+        return jsonify({"status": "ignored"}), 200
 
     for entry in data.get("entry") or []:
         if not isinstance(entry, dict):
             continue
+        waba_id = str(entry.get("id") or "")
         for change in entry.get("changes") or []:
-            if isinstance(change, dict):
-                _process_change(change)
+            if not isinstance(change, dict) or not isinstance(change.get("value"), dict):
+                continue
+            try:
+                _process_change(change.get("field") or "", change["value"], waba_id, only_connection)
+            except Exception:
+                # Um evento com erro não deve impedir os demais nem gerar reenvio
+                # infinito da Meta; o erro fica registrado nos logs do servidor.
+                logger.exception("Falha ao processar evento de webhook (field=%s).", change.get("field"))
     return jsonify({"status": "ok"}), 200
 
 
-# ---------------------------------------------------------------------------
-# Processamento de eventos
-# ---------------------------------------------------------------------------
-def _resolve_organization(phone_number_id: Any) -> str | None:
-    if not phone_number_id:
-        return None
-    result = (
-        get_service_client()
-        .table("meta_connections")
-        .select("organization_id")
-        .eq("phone_number_id", str(phone_number_id))
-        .limit(1)
-        .execute()
-    )
-    return result.data[0]["organization_id"] if result.data else None
-
-
-def _store_event(org_id: str | None, event_type: str, dedupe_key: str, payload: dict) -> None:
+def _claim(dedupe_key: str, org_id: str | None, event_type: str, payload: dict[str, Any],
+           status: str = "processed") -> bool:
+    """Registra o evento; False se já foi processado (reenvio da Meta)."""
     try:
         get_service_client().table("webhook_events").insert({
-            "dedupe_key": dedupe_key,
+            "dedupe_key": dedupe_key[:300],
             "organization_id": org_id,
             "channel": "whatsapp",
             "event_type": event_type,
             "payload": payload,
-            "status": "processed",
+            "status": status,
         }).execute()
+        return True
     except Exception as exc:
-        message = str(exc)
-        if "duplicate" in message or "23505" in message:
-            return  # evento duplicado (reenvio da Meta): ignora silenciosamente
-        logger.exception("Falha ao persistir webhook_event %s", event_type)
+        text = str(exc).lower()
+        if "duplicate" in text or "23505" in text:
+            return False
+        raise
+
+
+def _resolve(phone_number_id: Any, only_connection: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not phone_number_id:
+        return None
+    if only_connection is not None:
+        # URL exclusiva: só aceita eventos do número daquela conexão.
+        return only_connection if str(only_connection.get("phone_number_id")) == str(phone_number_id) else None
+    return connections.find_live_by_phone(str(phone_number_id))
+
+
+def _process_change(field: str, value: dict[str, Any], waba_id: str,
+                    only_connection: dict[str, Any] | None) -> None:
+    if field in ("messages", "smb_message_echoes", ""):
+        phone_number_id = (value.get("metadata") or {}).get("phone_number_id")
+        connection = _resolve(phone_number_id, only_connection)
+        org_id = connection["organization_id"] if connection else None
+
+        for message in value.get("messages") or []:
+            if not isinstance(message, dict) or not message.get("id"):
+                continue
+            minimal = {k: message[k] for k in ("id", "timestamp", "type") if k in message}
+            if not _claim(f"msg:{message['id']}", org_id, "message.received", minimal,
+                          "processed" if connection else "ignored"):
+                continue
+            if connection:
+                messaging.handle_inbound_message(connection, message, value.get("contacts") or [])
+
+        for echo in value.get("message_echoes") or []:
+            if not isinstance(echo, dict) or not echo.get("id"):
+                continue
+            minimal = {k: echo[k] for k in ("id", "timestamp", "type") if k in echo}
+            if not _claim(f"echo:{echo['id']}", org_id, "message.echo", minimal,
+                          "processed" if connection else "ignored"):
+                continue
+            if connection:
+                messaging.handle_inbound_message(connection, echo, [], echo=True)
+
+        for status in value.get("statuses") or []:
+            if not isinstance(status, dict) or not status.get("id") or not status.get("status"):
+                continue
+            minimal = {k: status[k] for k in ("id", "status", "timestamp") if k in status}
+            if not _claim(f"st:{status['id']}:{status['status']}", org_id, "message.status.updated",
+                          minimal, "processed" if connection else "ignored"):
+                continue
+            if connection:
+                messaging.handle_status(connection, status)
         return
-    if org_id:
-        outbound_webhooks.enqueue_event(org_id, event_type, payload)
 
-
-def _minimal(source: dict, keys: tuple[str, ...]) -> dict:
-    return {k: source[k] for k in keys if source.get(k) is not None}
-
-
-def _process_change(change: dict) -> None:
-    value = change.get("value") or {}
-    if not isinstance(value, dict):
+    if field == "message_template_status_update":
+        _fan_out_by_waba(waba_id, only_connection, "template.status.updated", {
+            k: value.get(k) for k in ("event", "message_template_id", "message_template_name",
+                                      "message_template_language", "reason") if value.get(k) is not None
+        }, dedupe=f"tpl:{value.get('message_template_id')}:{value.get('event')}")
         return
-    org_id = _resolve_organization((value.get("metadata") or {}).get("phone_number_id"))
 
-    for message in value.get("messages") or []:
-        if not isinstance(message, dict) or not message.get("id"):
-            continue
-        payload = _minimal(message, ("id", "from", "timestamp", "type"))
-        _store_event(org_id, "message.received", message["id"], payload)
+    if field == "account_update" and value.get("event") in ("PARTNER_REMOVED", "ACCOUNT_DELETED"):
+        for connection in _connections_by_waba(waba_id, only_connection):
+            if _claim(f"acct:{connection['id']}:{value.get('event')}", connection["organization_id"],
+                      "account.update", {"event": value.get("event")}):
+                connections.mark_offboarded(connection, f"A Meta informou: {value.get('event')}. Reconecte o número.")
+        return
 
-    for status in value.get("statuses") or []:
-        if not isinstance(status, dict) or not status.get("id") or not status.get("status"):
+    # Campos não tratados (ex.: history, smb_app_state_sync, phone_number_quality_update)
+    # são aceitos e ignorados com 200, como recomenda a Meta.
+    logger.info("Webhook da Meta com campo não tratado: %s", field or "<vazio>")
+
+
+def _connections_by_waba(waba_id: str, only_connection: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if only_connection is not None:
+        return [only_connection] if str(only_connection.get("waba_id")) == waba_id else []
+    if not waba_id:
+        return []
+    return (
+        get_service_client().table("meta_connections").select("*")
+        .eq("waba_id", waba_id).neq("status", "disconnected").execute().data
+    )
+
+
+def _fan_out_by_waba(waba_id: str, only_connection: dict[str, Any] | None, event_type: str,
+                     payload: dict[str, Any], dedupe: str) -> None:
+    seen: set[str] = set()
+    for connection in _connections_by_waba(waba_id, only_connection):
+        org_id = connection["organization_id"]
+        if org_id in seen:
             continue
-        dedupe_key = f"{status['id']}:{status['status']}"
-        payload = _minimal(status, ("id", "status", "timestamp", "recipient_id"))
-        _store_event(org_id, "message.status.updated", dedupe_key, payload)
+        seen.add(org_id)
+        if _claim(f"{dedupe}:{org_id}", org_id, event_type, payload):
+            outbound_webhooks.enqueue_event(org_id, event_type, {**payload, "waba_id": waba_id})

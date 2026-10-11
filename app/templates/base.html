@@ -1,68 +1,34 @@
-<!DOCTYPE html>
+{% from "_icons.html" import icon %}<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}AutoZap{% endblock %}</title>
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <meta name="description" content="{% block description %}API oficial do WhatsApp (Cloud API) com chaves próprias, webhooks e caixa de entrada para equipes.{% endblock %}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
   <link rel="alternate icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-  {% block extra_head %}{% endblock %}
+  {% block head %}{% endblock %}
 </head>
-<body class="{% if request.endpoint in ['auth.termos', 'auth.privacidade'] %}legal-body {% endif %}{% if current_user %}app-body{% else %}auth-body{% endif %}">
+<body class="{% block body_class %}{% endblock %}" data-csrf="{{ csrf_token() }}">
+  <a class="sr-only" href="#conteudo">Pular para o conteúdo</a>
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-  <div class="flash-bar" role="status" aria-live="polite">
+  <div class="toasts" role="status" aria-live="polite">
     {% for category, message in messages %}
-    <div class="flash alert-{{ category }}">{{ message }}</div>
+    {% set kind = category if category in ('success','error','warning','info') else 'info' %}
+    <div class="toast toast-{{ kind }}">
+      {{ icon({'success':'success','error':'error','warning':'alert','info':'info'}[kind]) }}
+      <div>{{ message }}</div>
+      <button type="button" class="toast-close" aria-label="Fechar aviso">&times;</button>
+    </div>
     {% endfor %}
   </div>
   {% endif %}
   {% endwith %}
-
-  {% if current_user %}
-  <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu" aria-expanded="false">☰</button>
-  <aside class="sidebar" id="sidebar" aria-label="Navegação principal">
-    <div class="sidebar-brand">
-      <a href="{{ url_for('dashboard.overview') }}" class="brand-link" aria-label="AutoZap">
-        <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="AutoZap" class="brand-logo" height="36">
-      </a>
-    </div>
-    <nav class="sidebar-nav">
-      <a class="{% if request.endpoint == 'dashboard.overview' %}active{% endif %}" href="{{ url_for('dashboard.overview') }}">Visão geral</a>
-      <a class="{% if request.endpoint == 'dashboard.channels' %}active{% endif %}" href="{{ url_for('dashboard.channels') }}">Canais</a>
-      <a class="{% if request.endpoint == 'dashboard.api_keys_list' %}active{% endif %}" href="{{ url_for('dashboard.api_keys_list') }}">Chaves de API</a>
-      <a class="{% if request.endpoint == 'dashboard.webhooks' %}active{% endif %}" href="{{ url_for('dashboard.webhooks') }}">Webhooks</a>
-      <a class="{% if request.endpoint == 'dashboard.logs' %}active{% endif %}" href="{{ url_for('dashboard.logs') }}">Logs</a>
-      <a class="{% if request.endpoint == 'dashboard.settings' %}active{% endif %}" href="{{ url_for('dashboard.settings') }}">Configurações</a>
-    </nav>
-    <div class="sidebar-footer">
-      <div class="org">{{ membership.org_name or 'Organização' }}</div>
-      <form method="post" action="{{ url_for('auth.logout') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-secondary btn-sm btn-block">Sair da conta</button>
-      </form>
-    </div>
-  </aside>
-  <main class="main-content">
-    {% block content %}{% endblock %}
-  </main>
-  {% else %}
-  <main class="auth-card">
-    <div class="auth-logo">
-      <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="AutoZap" class="auth-logo-img" height="48">
-      <p>Plataforma de APIs Oficiais da Meta</p>
-    </div>
-    {% block auth_content %}{% endblock %}
-    <div class="form-links">
-      <a href="{{ url_for('auth.termos') }}">Termos</a>
-      <span class="divider">•</span>
-      <a href="{{ url_for('auth.privacidade') }}">Privacidade</a>
-    </div>
-  </main>
-  {% endif %}
-
+  {% block body %}{% endblock %}
   <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
-  {% block extra_scripts %}{% endblock %}
+  {% block scripts %}{% endblock %}
 </body>
 </html>

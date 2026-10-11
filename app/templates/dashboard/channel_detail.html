@@ -1,0 +1,189 @@
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ c.verified_name or c.display_phone_number or 'Número' }} — {{ app_name }}{% endblock %}
+{% block content %}
+{% set can_admin = membership.role in ('owner', 'admin') %}
+{% set can_send = membership.role in ('owner', 'admin', 'developer') %}
+{% set active = c.status == 'active' %}
+<div class="breadcrumb"><a href="{{ url_for('dashboard.channels') }}">Números</a> <span>/</span> <span>{{ c.display_phone_number or c.phone_number_id }}</span></div>
+<div class="page-head">
+  <div class="channel-head">
+    <div class="channel-logo">{{ icon('whatsapp') }}</div>
+    <div>
+      <h1>{{ c.verified_name or 'Número sem nome' }}</h1>
+      <p>{{ c.display_phone_number or '—' }} ·
+        {% if active %}<span class="badge badge-ok"><span class="dot"></span>Ativo</span>
+        {% elif c.status == 'error' %}<span class="badge badge-danger"><span class="dot"></span>Com erro</span>
+        {% elif c.status == 'disconnected' %}<span class="badge"><span class="dot"></span>Desconectado</span>
+        {% else %}<span class="badge badge-warn"><span class="dot"></span>Pendente</span>{% endif %}</p>
+    </div>
+  </div>
+  {% if c.status != 'disconnected' %}
+  <div class="row">
+    {% if can_send %}
+    <form method="post" action="{{ url_for('meta_connect.refresh', connection_id=c.id) }}" data-loading>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit">{{ icon('refresh') }} Revalidar na Meta</button>
+    </form>
+    {% endif %}
+    {% if can_admin %}
+    <form method="post" action="{{ url_for('meta_connect.disconnect', connection_id=c.id) }}" data-confirm="Desconectar este número? O token será apagado e a API deixará de enviar por ele.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-danger" type="submit">{{ icon('trash') }} Desconectar</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if c.last_error %}<div class="alert alert-error">{{ icon('error') }}<div><strong>Último erro informado:</strong> {{ c.last_error }}</div></div>{% endif %}
+
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-header"><div><h2>Identificadores</h2><p>Use o Phone Number ID nas chamadas da API.</p></div></div>
+      <dl class="kv">
+        <dt>Phone Number ID</dt><dd><span class="copy-inline"><code id="pnid">{{ c.phone_number_id }}</code><button class="btn btn-ghost btn-icon btn-sm" type="button" data-copy="#pnid" aria-label="Copiar Phone Number ID">{{ icon('copy', 'icon-sm') }}</button></span></dd>
+        <dt>WABA ID</dt><dd class="mono">{{ c.waba_id or '—' }}</dd>
+        {% if c.business_id %}<dt>Portfólio empresarial</dt><dd class="mono">{{ c.business_id }}</dd>{% endif %}
+        <dt>Tipo de conexão</dt><dd>{{ {'embedded_signup':'Cadastro oficial da Meta','coexistence':'Coexistência com o app WhatsApp Business','manual':'Token de System User'}.get(c.connection_type, c.connection_type) }}</dd>
+        <dt>Qualidade</dt><dd>{{ {'GREEN':'Alta','YELLOW':'Média','RED':'Baixa'}.get(c.quality_rating, c.quality_rating or '—') }}</dd>
+        <dt>Nome exibido</dt><dd>{{ {'APPROVED':'Aprovado','PENDING_REVIEW':'Em análise','DECLINED':'Recusado'}.get(c.name_status, c.name_status or '—') }}</dd>
+        <dt>Validado em</dt><dd>{{ c.last_validated_at|dt }}</dd>
+      </dl>
+    </section>
+
+    {% if active and can_send %}
+    <section class="card" id="teste">
+      <div class="card-header"><div><h2>Enviar mensagem de teste</h2><p>Mensagem livre só é entregue se o contato escreveu nas últimas 24h. Fora disso, use um modelo aprovado.</p></div></div>
+      <form method="post" action="{{ url_for('dashboard.channel_test_message', connection_id=c.id) }}" data-loading data-tabs-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-grid">
+          <div class="field"><label for="t_to">Destinatário</label><input id="t_to" name="to" required inputmode="tel" placeholder="5511999998888"><span class="hint">Com código do país e DDD. Precisa ter consentido em receber mensagens.</span></div>
+          <div class="field"><label for="t_kind">Tipo</label><select id="t_kind" name="kind" data-toggle-kind><option value="text">Texto livre</option><option value="template">Modelo aprovado</option></select></div>
+        </div>
+        <div data-kind="text"><div class="field"><label for="t_body">Mensagem</label><textarea id="t_body" name="body" maxlength="4096" placeholder="Olá! Esta é uma mensagem de teste."></textarea></div></div>
+        <div data-kind="template" hidden>
+          <div class="form-grid">
+            <div class="field"><label for="t_tpl">Modelo</label>
+              <select id="t_tpl" name="template_name" data-template-select>
+                {% for t in templates if t.status == 'APPROVED' %}<option value="{{ t.name }}" data-language="{{ t.language }}">{{ t.name }} ({{ t.language }})</option>{% else %}<option value="">Nenhum modelo aprovado</option>{% endfor %}
+              </select></div>
+            <div class="field"><label for="t_lang">Idioma</label><input id="t_lang" name="template_language" value="{{ (templates|selectattr('status','equalto','APPROVED')|first or {}).get('language', 'pt_BR') }}"></div>
+          </div>
+          <div class="field"><label for="t_params">Variáveis do corpo</label><input id="t_params" name="params" placeholder="Ana | 12345"><span class="hint">Separe por | na ordem {{ '{{1}}' }}, {{ '{{2}}' }}…</span></div>
+        </div>
+        <button class="btn btn-primary" type="submit">{{ icon('send') }} Enviar</button>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="card" id="modelos">
+      <div class="card-header"><div><h2>Modelos de mensagem</h2><p>Necessários para iniciar conversas ou falar fora da janela de 24h. A Meta analisa cada modelo.</p></div>
+        {% if active and can_admin %}<button class="btn btn-sm" type="button" data-open="templateDialog">{{ icon('plus') }} Novo modelo</button>{% endif %}</div>
+      {% if templates_error %}
+      <div class="alert alert-warning">{{ icon('alert') }}<div>Não foi possível carregar os modelos: {{ templates_error }}</div></div>
+      {% elif templates %}
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Nome</th><th>Idioma</th><th>Categoria</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for t in templates %}
+          <tr>
+            <td><code>{{ t.name }}</code></td><td>{{ t.language }}</td><td>{{ t.category|lower }}</td>
+            <td>{% if t.status == 'APPROVED' %}<span class="badge badge-ok">Aprovado</span>{% elif t.status in ('REJECTED','DISABLED') %}<span class="badge badge-danger" title="{{ t.rejected_reason or '' }}">{{ 'Rejeitado' if t.status == 'REJECTED' else 'Desativado' }}</span>{% else %}<span class="badge badge-warn">{{ {'PENDING':'Em análise','PAUSED':'Pausado'}.get(t.status, t.status) }}</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+      <div class="empty">{{ icon('template') }}<p>Nenhum modelo nesta conta do WhatsApp ainda.</p></div>
+      {% endif %}
+    </section>
+
+    <section class="card card-flush">
+      <div class="card-header"><div><h2>Mensagens recentes</h2><p>Status atualizado pelos webhooks da Meta.</p></div></div>
+      {% if recent %}
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Quando</th><th>Direção</th><th>Contato</th><th>Tipo</th><th>Status</th></tr></thead>
+        <tbody>{% for m in recent %}
+          <tr>
+            <td class="nowrap">{{ m.created_at|dt }}</td>
+            <td>{{ 'Recebida' if m.direction == 'inbound' else 'Enviada' }}</td>
+            <td class="mono">{{ m.contact_wa_id }}</td>
+            <td>{{ m.type }}</td>
+            <td>{% include "dashboard/_message_status.html" %}{% if m.error and m.error.message %}<div class="small" style="color:var(--danger)">{{ m.error.message }}</div>{% endif %}</td>
+          </tr>{% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+      <div class="empty">{{ icon('send') }}<p>Nenhuma mensagem por este número ainda.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Saúde da conexão</h2>
+      <ul class="checklist health">
+        <li class="{% if active %}done{% endif %}"><span class="check-dot">{% if active %}{{ icon('check', 'icon-sm') }}{% endif %}</span>
+          <div class="grow"><div class="check-title">Token válido na Meta</div><p>Revalide se trocar permissões ou o token.</p></div></li>
+        <li class="{% if c.webhook_subscribed %}done{% endif %}"><span class="check-dot">{% if c.webhook_subscribed %}{{ icon('check', 'icon-sm') }}{% endif %}</span>
+          <div class="grow"><div class="check-title">Webhooks inscritos</div><p>Sem isso, mensagens recebidas e status não chegam.</p>
+          {% if not c.webhook_subscribed and active and can_admin %}
+          <form method="post" action="{{ url_for('meta_connect.subscribe', connection_id=c.id) }}" class="mt-1" data-loading>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Inscrever agora</button></form>
+          {% endif %}</div></li>
+        <li class="{% if c.registered %}done{% endif %}"><span class="check-dot">{% if c.registered %}{{ icon('check', 'icon-sm') }}{% endif %}</span>
+          <div class="grow"><div class="check-title">Número registrado na Cloud API</div><p>Números novos do cadastro oficial precisam ser registrados com um PIN de 6 dígitos.</p>
+          {% if not c.registered and active and can_admin %}
+          <form method="post" action="{{ url_for('meta_connect.register', connection_id=c.id) }}" class="row mt-1" data-loading>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="sr-only" for="pin">PIN</label>
+            <input class="input" style="width:120px" id="pin" name="pin" inputmode="numeric" pattern="\d{6}" maxlength="6" required placeholder="PIN">
+            <button class="btn btn-sm" type="submit">Registrar</button></form>
+          {% endif %}</div></li>
+      </ul>
+    </section>
+
+    {% if own_app %}
+    <section class="card">
+      <h2>Webhook do seu app Meta</h2>
+      <p class="small muted">Em <em>developers.facebook.com → seu app → WhatsApp → Configuração</em>, use estes dados e assine o campo <code>messages</code>.</p>
+      <div class="field"><span class="label">URL de callback</span><div class="secret"><code id="ownUrl">{{ own_webhook_url }}</code><button class="btn btn-ghost btn-icon btn-sm" type="button" data-copy="#ownUrl" aria-label="Copiar URL">{{ icon('copy', 'icon-sm') }}</button></div></div>
+      {% if can_admin and own_verify_token %}
+      <div class="field"><span class="label">Token de verificação</span><div class="secret"><code id="ownToken">{{ own_verify_token }}</code><button class="btn btn-ghost btn-icon btn-sm" type="button" data-copy="#ownToken" aria-label="Copiar token">{{ icon('copy', 'icon-sm') }}</button></div></div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <h2>Usar pela API</h2>
+<pre class="wrap-code"><code>POST /api/v1/whatsapp/{{ c.phone_number_id }}/messages</code></pre>
+      <a class="btn btn-sm" href="{{ url_for('public.docs') }}#enviar" target="_blank" rel="noopener">Ver exemplos {{ icon('external', 'icon-sm') }}</a>
+    </section>
+  </div>
+</div>
+
+{% if active and can_admin %}
+<dialog class="modal" id="templateDialog" aria-labelledby="tplTitle">
+  <form method="post" action="{{ url_for('dashboard.channel_create_template', connection_id=c.id) }}" data-loading>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="modal-head"><h2 id="tplTitle">Novo modelo de mensagem</h2><button class="btn btn-ghost btn-icon" type="button" data-close aria-label="Fechar">{{ icon('x') }}</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label for="tp_name">Nome</label><input id="tp_name" name="name" required pattern="[a-z0-9_]{1,512}" placeholder="confirmacao_pedido"><span class="hint">Minúsculas, números e _</span></div>
+        <div class="field"><label for="tp_cat">Categoria</label><select id="tp_cat" name="category"><option value="UTILITY">Utilidade (transacional)</option><option value="MARKETING">Marketing</option></select></div>
+        <div class="field"><label for="tp_lang">Idioma</label><select id="tp_lang" name="language">{% for code, label in languages %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="field"><label for="tp_header">Cabeçalho (opcional)</label><input id="tp_header" name="header" maxlength="60"></div>
+      <div class="field"><label for="tp_body">Corpo</label><textarea id="tp_body" name="body" required maxlength="1024" placeholder="Olá {{ '{{1}}' }}, seu pedido {{ '{{2}}' }} foi confirmado."></textarea>
+        <span class="hint">Use {{ '{{1}}' }}, {{ '{{2}}' }}… para variáveis.</span></div>
+      <div class="field"><label for="tp_examples">Exemplos das variáveis</label><input id="tp_examples" name="examples" placeholder="Ana | 12345"><span class="hint">Obrigatório se houver variáveis. Separe por |.</span></div>
+      <div class="field"><label for="tp_footer">Rodapé (opcional)</label><input id="tp_footer" name="footer" maxlength="60"></div>
+      <p class="hint">A categoria e o conteúdo são revisados pela Meta e influenciam a cobrança. Modelos de autenticação devem ser criados no WhatsApp Manager.</p>
+    </div>
+    <div class="modal-foot"><button class="btn" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Enviar para análise</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

@@ -1,96 +1,91 @@
-{% extends "base.html" %}
-{% block title %}Webhooks — AutoZap{% endblock %}
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Webhooks — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>Webhooks de saída</h1>
-  <p>Configure URLs para receber eventos da plataforma</p>
+{% set can_admin = membership.role in ('owner', 'admin') %}
+{% set can_dev = membership.role in ('owner', 'admin', 'developer') %}
+<div class="page-head">
+  <div><h1>Webhooks</h1><p>Receba mensagens e status de entrega no seu sistema em tempo real.</p></div>
+  {% if can_admin %}<button class="btn btn-primary" type="button" data-open="whDialog">{{ icon('plus') }} Novo webhook</button>{% endif %}
 </div>
 
-{% if membership.role in ('owner','admin') %}
-<div class="card" style="margin-bottom:24px;">
-  <h2 style="margin-bottom:16px; font-size:1.1rem;">Novo webhook</h2>
-  <form method="post" action="{{ url_for('dashboard.webhooks_create') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-group">
-      <label>URL HTTPS</label>
-      <input type="url" name="url" required placeholder="https://exemplo.com/webhook">
-    </div>
-    <div class="form-group">
-      <label>Descrição</label>
-      <input type="text" name="description" maxlength="200" placeholder="Opcional">
-    </div>
-    <div class="form-group">
-      <label>Eventos</label>
-      <div class="checkboxes">
-        <label><input type="checkbox" name="events" value="message.received"> message.received</label>
-        <label><input type="checkbox" name="events" value="message.status.updated"> message.status.updated</label>
-        <label><input type="checkbox" name="events" value="channel.connected"> channel.connected</label>
-        <label><input type="checkbox" name="events" value="channel.disconnected"> channel.disconnected</label>
-        <label><input type="checkbox" name="events" value="api.request.failed"> api.request.failed</label>
+{% if endpoints %}
+<div class="stack">
+  {% for e in endpoints %}
+  <article class="card">
+    <div class="row-between">
+      <div class="grow">
+        <div class="row"><strong class="mono" style="word-break:break-all">{{ e.url }}</strong>
+          {% if e.status == 'active' %}<span class="badge badge-ok"><span class="dot"></span>Ativo</span>{% else %}<span class="badge"><span class="dot"></span>Pausado</span>{% endif %}</div>
+        {% if e.description %}<div class="small muted">{{ e.description }}</div>{% endif %}
+        <div class="row mt-1">{% for ev in e.events %}<span class="badge">{{ ev }}</span>{% endfor %}</div>
+      </div>
+      <div class="table-actions">
+        {% if can_dev and e.status == 'active' %}
+        <form method="post" action="{{ url_for('dashboard.webhooks_test', endpoint_id=e.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">{{ icon('send', 'icon-sm') }} Testar</button></form>
+        {% endif %}
+        {% if can_admin %}
+        <form method="post" action="{{ url_for('dashboard.webhooks_update', endpoint_id=e.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="{{ 'disabled' if e.status == 'active' else 'active' }}"><button class="btn btn-sm" type="submit">{{ 'Pausar' if e.status == 'active' else 'Reativar' }}</button></form>
+        <form method="post" action="{{ url_for('dashboard.webhooks_rotate_secret', endpoint_id=e.id) }}" data-confirm="Gerar um novo segredo? O atual deixa de valer imediatamente."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Novo segredo</button></form>
+        <form method="post" action="{{ url_for('dashboard.webhooks_delete', endpoint_id=e.id) }}" data-confirm="Remover este webhook e seu histórico de entregas?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-danger" type="submit">Remover</button></form>
+        {% endif %}
       </div>
     </div>
-    <button type="submit" class="btn btn-primary">Criar webhook</button>
-  </form>
-</div>
-{% endif %}
-
-<h2 style="margin-bottom:12px;">Endpoints</h2>
-{% if endpoints %}
-<div class="table-container">
-  <table>
-    <thead><tr><th>URL</th><th>Eventos</th><th>Status</th><th>Ações</th></tr></thead>
-    <tbody>
-      {% for e in endpoints %}
-      <tr>
-        <td>{{ e.url }}</td>
-        <td>{{ e.events | join(", ") }}</td>
-        <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
-        <td class="actions-cell">
-          <form method="post" action="{{ url_for('dashboard.webhooks_test', endpoint_id=e.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm">Testar</button>
-          </form>
-          <form method="post" action="{{ url_for('dashboard.webhooks_rotate_secret', endpoint_id=e.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm" data-confirm="Nova chave de assinatura? A antiga parará de funcionar.">Rotacionar</button>
-          </form>
-          <form method="post" action="{{ url_for('dashboard.webhooks_delete', endpoint_id=e.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-danger" data-confirm="Remover este webhook?">Remover</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  </article>
+  {% endfor %}
 </div>
 {% else %}
-<div class="card empty-state">
-  <p>Nenhum webhook cadastrado ainda.</p>
-</div>
+<div class="card"><div class="empty">{{ icon('webhook') }}<h3>Nenhum webhook cadastrado</h3>
+  <p>Cadastre uma URL HTTPS (ex.: nó Webhook do n8n) para receber mensagens dos seus clientes e atualizações de status.</p>
+  {% if can_admin %}<button class="btn btn-primary" type="button" data-open="whDialog">{{ icon('plus') }} Adicionar webhook</button>{% endif %}
+</div></div>
 {% endif %}
 
-<h2 style="margin-top:32px; margin-bottom:12px;">Histórico de entregas</h2>
+<h2 class="section-title">Histórico de entregas</h2>
 {% if deliveries %}
-<div class="table-container">
-  <table>
-    <thead><tr><th>Evento</th><th>Status</th><th>Tentativas</th><th>HTTP</th><th>Horário</th></tr></thead>
-    <tbody>
-      {% for d in deliveries %}
-      <tr>
-        <td>{{ d.event_type }}</td>
-        <td><span class="badge badge-{{ d.status }}">{{ d.status }}</span></td>
-        <td>{{ d.attempts }}</td>
-        <td>{{ d.response_status or "—" }}</td>
-        <td>{{ d.created_at }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+<div class="card card-flush"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Quando</th><th>Evento</th><th>Destino</th><th>Status</th><th class="num">Tentativas</th><th>Resposta</th><th></th></tr></thead>
+  <tbody>
+  {% for d in deliveries %}
+  <tr>
+    <td class="nowrap">{{ d.created_at|dt }}</td>
+    <td><code>{{ d.event_type }}</code></td>
+    <td class="small muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ (endpoints_by_id.get(d.endpoint_id) or {}).get('url', 'removido') }}</td>
+    <td>{% if d.status == 'delivered' %}<span class="badge badge-ok"><span class="dot"></span>Entregue</span>
+        {% elif d.status == 'failed' %}<span class="badge badge-danger"><span class="dot"></span>Falhou</span>
+        {% else %}<span class="badge badge-warn"><span class="dot"></span>{{ 'Nova tentativa ' ~ (d.next_retry_at|ago) if d.attempts else 'Na fila' }}</span>{% endif %}</td>
+    <td class="num">{{ d.attempts }}/{{ d.max_attempts }}</td>
+    <td class="small">{% if d.response_status %}HTTP {{ d.response_status }}{% endif %}{% if d.last_error %}<div style="color:var(--danger)">{{ d.last_error }}</div>{% endif %}</td>
+    <td>{% if can_dev and d.status != 'delivered' %}<form method="post" action="{{ url_for('dashboard.webhooks_redeliver', delivery_id=d.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Reenviar</button></form>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
 {% else %}
-<div class="card empty-state">
-  <p>Nenhuma entrega registrada ainda.</p>
-</div>
+<div class="card"><div class="empty">{{ icon('activity') }}<p>As entregas aparecem aqui assim que algum evento acontecer.</p></div></div>
+{% endif %}
+
+{% if can_admin %}
+<dialog class="modal" id="whDialog" aria-labelledby="whTitle" style="width:min(680px, calc(100vw - 32px))">
+  <form method="post" action="{{ url_for('dashboard.webhooks_create') }}" data-loading>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="modal-head"><h2 id="whTitle">Novo webhook</h2><button class="btn btn-ghost btn-icon" type="button" data-close aria-label="Fechar">{{ icon('x') }}</button></div>
+    <div class="modal-body">
+      <div class="field"><label for="w_url">URL (HTTPS)</label><input id="w_url" type="url" name="url" required maxlength="2048" placeholder="https://seu-sistema.com/webhooks/whatsapp">
+        <span class="hint">Endereços internos ou privados são bloqueados por segurança.</span></div>
+      <div class="field"><label for="w_desc">Descrição (opcional)</label><input id="w_desc" name="description" maxlength="200" placeholder="Ex.: Fluxo de atendimento no n8n"></div>
+      <fieldset style="border:0;padding:0;margin:0">
+        <legend class="label mb-1">Eventos</legend>
+        <div class="check-grid">
+          {% for key, label in events.items() %}
+          <label class="check-card"><input type="checkbox" name="events" value="{{ key }}" {% if key in ('message.received', 'message.status.updated') %}checked{% endif %}><div><strong>{{ key }}</strong><span>{{ label }}</span></div></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </div>
+    <div class="modal-foot"><button class="btn" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Criar webhook</button></div>
+  </form>
+</dialog>
 {% endif %}
 {% endblock %}

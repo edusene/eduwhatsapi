@@ -1,46 +1,54 @@
-"""Rotas de autenticação (Supabase Auth) e páginas legais."""
+"""Autenticação (Supabase Auth): cadastro, login, confirmação de e-mail,
+recuperação de senha, convites e troca de organização.
+
+A senha nunca passa pelo nosso banco: o Supabase Auth valida as credenciais.
+Tokens recebidos no navegador (confirmação/recuperação) são validados no
+servidor com ``auth.get_user`` antes de criar a sessão.
+"""
 from __future__ import annotations
 
 import logging
-import re
 
-from flask import (
-    Blueprint,
-    flash,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
+from flask import Blueprint, current_app, flash, g, jsonify, redirect, render_template, request, session, url_for
 
 from app.extensions import limiter
 from app.services import organizations, security
-from app.services.supabase_client import create_user_client, get_auth_client
+from app.services.supabase_client import SupabaseNotConfigured, create_user_client, get_auth_client
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("auth", __name__)
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MIN_PASSWORD = 10
 
 
 def _safe_next(next_url: str | None) -> str:
-    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+    if next_url and next_url.startswith("/") and not next_url.startswith("//") and "\\" not in next_url:
         return next_url
     return url_for("dashboard.overview")
 
 
-def _is_supabase_configured() -> bool:
+def _auth_client():
     try:
-        get_auth_client()
-        return True
-    except Exception:
-        return False
+        return get_auth_client()
+    except SupabaseNotConfigured:
+        return None
+
+
+def _start_session(user_id: str, email: str | None) -> None:
+    """Nova sessão (evita fixação de sessão) com token CSRF novo."""
+    session.clear()
+    session.permanent = True
+    session["user"] = {"id": str(user_id), "email": (email or "").lower()}
+    security.generate_csrf_token()
+
+
+def _redirect_base() -> str:
+    return current_app.config["APP_BASE_URL"].rstrip("/")
 
 
 @bp.get("/login")
 def login():
-    if organizations.get_current_user():
+    if g.get("user"):
         return redirect(url_for("dashboard.overview"))
     return render_template("auth/login.html")
 
@@ -51,130 +59,156 @@ def login_post():
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
     if not email or not password:
-        flash("E-mail e senha são obrigatórios.", "error")
-        return render_template("auth/login.html"), 400
-
-    if not _is_supabase_configured():
-        flash(
-            "Serviço de autenticação não configurado. Verifique as variáveis SUPABASE_URL e SUPABASE_ANON_KEY.",
-            "error",
-        )
-        return render_template("auth/login.html"), 503
-
+        flash("Informe e-mail e senha.", "error")
+        return render_template("auth/login.html", email=email), 400
+    client = _auth_client()
+    if client is None:
+        flash("Autenticação indisponível: configure SUPABASE_URL e SUPABASE_ANON_KEY.", "error")
+        return render_template("auth/login.html", email=email), 503
     try:
-        resp = get_auth_client().auth.sign_in_with_password(
-            {"email": email, "password": password}
-        )
-        user = resp.user
-        access_token = resp.session.access_token if resp.session else None
+        user = client.auth.sign_in_with_password({"email": email, "password": password}).user
     except Exception as exc:
-        logger.warning("Falha no login para %s: %s", email, type(exc).__name__)
-        flash("E-mail ou senha inválidos.", "error")
-        return render_template("auth/login.html"), 400
-
-    session.clear()
-    session["user"] = {"id": str(user.id), "email": user.email}
-    if access_token:
-        session["access_token"] = access_token
-    security.generate_csrf_token()
+        logger.info("Login recusado (%s).", type(exc).__name__)
+        if "not confirmed" in str(exc).lower():
+            flash("Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.", "warning")
+        else:
+            flash("E-mail ou senha incorretos.", "error")
+        return render_template("auth/login.html", email=email), 400
+    _start_session(user.id, user.email)
     return redirect(_safe_next(request.form.get("next")))
 
 
 @bp.get("/register")
 def register():
-    if organizations.get_current_user():
+    if g.get("user"):
         return redirect(url_for("dashboard.overview"))
-    return render_template("auth/register.html")
+    plan = request.args.get("plan")
+    return render_template("auth/register.html", plans=organizations.PLANS,
+                           selected_plan=plan if plan in organizations.PLANS else "api_chat",
+                           invite=request.args.get("invite", ""))
 
 
 @bp.post("/register")
-@limiter.limit("10 per minute")
+@limiter.limit("5 per minute")
 def register_post():
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
     org_name = request.form.get("org_name", "").strip()
+    plan = request.form.get("plan", "api_chat")
+    invite = request.form.get("invite", "").strip()
+    ctx = {"plans": organizations.PLANS, "selected_plan": plan if plan in organizations.PLANS else "api_chat",
+           "email": email, "org_name": org_name, "invite": invite}
 
     errors = []
-    if not email or not _EMAIL_RE.match(email) or len(email) > 254:
-        errors.append("E-mail inválido.")
-    if not password or len(password) < 10:
-        errors.append("A senha deve ter pelo menos 10 caracteres.")
-    if not org_name or len(org_name) > 120:
-        errors.append("Nome da organização é obrigatório (máx. 120 caracteres).")
+    if not organizations.valid_email(email):
+        errors.append("Informe um e-mail válido.")
+    if len(password) < MIN_PASSWORD:
+        errors.append(f"A senha deve ter pelo menos {MIN_PASSWORD} caracteres.")
+    if not invite and (not org_name or len(org_name) > 120):
+        errors.append("Informe o nome da empresa (até 120 caracteres).")
+    if not request.form.get("accept_terms"):
+        errors.append("É preciso aceitar os Termos de Uso e a Política de Privacidade.")
     if errors:
         for e in errors:
             flash(e, "error")
-        return render_template("auth/register.html"), 400
+        return render_template("auth/register.html", **ctx), 400
 
-    if not _is_supabase_configured():
-        flash(
-            "Serviço de autenticação não configurado. Verifique as variáveis SUPABASE_URL e SUPABASE_ANON_KEY.",
-            "error",
-        )
-        return render_template("auth/register.html"), 503
-
+    client = _auth_client()
+    if client is None:
+        flash("Autenticação indisponível: configure SUPABASE_URL e SUPABASE_ANON_KEY.", "error")
+        return render_template("auth/register.html", **ctx), 503
     try:
-        resp = get_auth_client().auth.sign_up(
-            {"email": email, "password": password}
-        )
+        resp = client.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {"email_redirect_to": f"{_redirect_base()}/auth/callback"},
+        })
         user = resp.user
-        access_token = resp.session.access_token if resp.session else None
+        has_session = bool(resp.session and resp.session.access_token)
     except Exception as exc:
-        logger.warning("Falha no registro para %s: %s", email, str(exc))
         msg = str(exc).lower()
-        if "invalid path" in msg or "404" in msg:
-            flash(
-                "Erro de configuração do Supabase. Verifique se SUPABASE_URL está correto (ex: https://seu-projeto.supabase.co).",
-                "error",
-            )
-        elif "already" in msg or "exists" in msg or "duplicate" in msg:
-            flash("Este e-mail já está cadastrado.", "error")
+        logger.info("Cadastro recusado (%s).", type(exc).__name__)
+        if "already" in msg or "exists" in msg:
+            flash("Este e-mail já tem conta. Entre ou recupere a senha.", "error")
         elif "password" in msg:
-            flash("A senha é muito fraca ou inválida.", "error")
-        elif "rate" in msg or "limit" in msg:
+            flash("Senha recusada: use uma senha mais forte.", "error")
+        elif "rate" in msg:
             flash("Muitas tentativas. Aguarde alguns minutos.", "error")
         else:
-            flash("Não foi possível criar a conta. Tente novamente.", "error")
-        return render_template("auth/register.html"), 400
-
+            flash("Não foi possível criar a conta agora. Tente novamente.", "error")
+        return render_template("auth/register.html", **ctx), 400
     if not user:
-        logger.error("Registro retornou sem usuário para %s", email)
-        flash("Erro inesperado ao criar conta.", "error")
-        return render_template("auth/register.html"), 400
+        flash("Não foi possível criar a conta agora. Tente novamente.", "error")
+        return render_template("auth/register.html", **ctx), 400
 
-    # Criar organização para o usuário
-    try:
-        organizations.create_organization_for_user(str(user.id), org_name)
-    except Exception as exc:
-        logger.error("Falha ao criar organização para %s: %s", email, str(exc))
-        flash("Conta criada, mas houve um erro ao configurar a organização. Entre em contato com o suporte.", "warning")
+    if not invite:
+        try:
+            organizations.create_organization_for_user(str(user.id), org_name, plan, email=email)
+        except Exception:
+            logger.exception("Falha ao criar organização no cadastro.")
+            flash("Conta criada, mas a empresa não pôde ser configurada agora. "
+                  "Ela será criada no primeiro acesso.", "warning")
 
-    session["user"] = {"id": str(user.id), "email": user.email}
-    if access_token:
-        session["access_token"] = access_token
-    security.generate_csrf_token()
-
-    if access_token:
-        flash("Conta criada! Bem-vindo.", "success")
+    if has_session:
+        _start_session(user.id, user.email)
+        if invite:
+            return redirect(url_for("auth.invite", token=invite))
+        flash("Conta criada! Vamos conectar seu primeiro número.", "success")
         return redirect(url_for("dashboard.overview"))
+    if invite:
+        session["pending_invite"] = invite
+    return render_template("auth/check_email.html", email=email)
 
-    flash(
-        "Conta criada. Confira seu e-mail para confirmar o cadastro antes de acessar.",
-        "info",
-    )
-    return redirect(url_for("auth.login"))
+
+@bp.get("/auth/callback")
+def auth_callback():
+    """Destino dos links de e-mail do Supabase (tokens chegam no fragmento #)."""
+    return render_template("auth/callback.html")
+
+
+@bp.post("/auth/session")
+@limiter.limit("10 per minute")
+def auth_session():
+    """Recebe o access_token do link de confirmação e valida no Supabase."""
+    data = request.get_json(silent=True) or {}
+    token = str(data.get("access_token") or "")
+    if not token or len(token) > 4096:
+        return jsonify({"ok": False, "message": "Link inválido ou expirado."}), 400
+    client = _auth_client()
+    if client is None:
+        return jsonify({"ok": False, "message": "Autenticação indisponível."}), 503
+    try:
+        user = client.auth.get_user(token).user
+    except Exception:
+        return jsonify({"ok": False, "message": "Link inválido ou expirado. Faça login."}), 400
+    if not user:
+        return jsonify({"ok": False, "message": "Link inválido ou expirado. Faça login."}), 400
+    pending_invite = session.get("pending_invite")
+    _start_session(user.id, user.email)
+    if pending_invite:
+        return jsonify({"ok": True, "redirect": url_for("auth.invite", token=pending_invite)})
+    flash("E-mail confirmado. Bem-vindo!", "success")
+    return jsonify({"ok": True, "redirect": url_for("dashboard.overview")})
 
 
 @bp.post("/logout")
 def logout():
     session.clear()
-    flash("Sessão encerrada.", "success")
+    flash("Você saiu da sua conta.", "success")
     return redirect(url_for("auth.login"))
 
 
 @bp.get("/logout")
 def logout_get():
-    return redirect(url_for("dashboard.overview"))
+    # Logout exige POST com CSRF; GET apenas volta.
+    return redirect(url_for("dashboard.overview") if g.get("user") else url_for("auth.login"))
+
+
+@bp.get("/setup-problem")
+def setup_problem():
+    if not g.get("user"):
+        return redirect(url_for("auth.login"))
+    return render_template("auth/setup_problem.html")
 
 
 @bp.get("/forgot-password")
@@ -183,29 +217,22 @@ def forgot_password():
 
 
 @bp.post("/forgot-password")
-@limiter.limit("10 per minute")
+@limiter.limit("5 per minute")
 def forgot_password_post():
     email = request.form.get("email", "").strip().lower()
-    if not email or not _EMAIL_RE.match(email):
+    if not organizations.valid_email(email):
         flash("Informe um e-mail válido.", "error")
         return render_template("auth/forgot_password.html"), 400
-
-    if not _is_supabase_configured():
-        flash("Serviço de autenticação não configurado.", "error")
+    client = _auth_client()
+    if client is None:
+        flash("Autenticação indisponível.", "error")
         return render_template("auth/forgot_password.html"), 503
-
     try:
-        base = request.root_url.rstrip("/")
-        get_auth_client().auth.reset_password_for_email(
-            email, {"redirect_to": f"{base}/reset-password"}
-        )
+        client.auth.reset_password_for_email(email, {"redirect_to": f"{_redirect_base()}/reset-password"})
     except Exception as exc:
-        logger.warning("Falha ao enviar recuperação para %s: %s", email, str(exc))
-
-    flash(
-        "Se o e-mail existir em nossa base, enviaremos instruções de recuperação.",
-        "info",
-    )
+        logger.info("Falha ao solicitar recuperação (%s).", type(exc).__name__)
+    # Mesma resposta sempre: não revela se o e-mail existe.
+    flash("Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha.", "info")
     return redirect(url_for("auth.login"))
 
 
@@ -215,37 +242,56 @@ def reset_password():
 
 
 @bp.post("/reset-password")
-@limiter.limit("10 per minute")
+@limiter.limit("5 per minute")
 def reset_password_post():
     token = request.form.get("access_token", "").strip()
     new_password = request.form.get("new_password", "")
-    confirm = request.form.get("confirm_password", "")
     if not token:
-        flash("Token de recuperação ausente ou expirado.", "error")
+        flash("Link de recuperação ausente ou expirado. Solicite outro.", "error")
         return render_template("auth/reset_password.html"), 400
-    if not new_password or len(new_password) < 10:
-        flash("A nova senha deve ter pelo menos 10 caracteres.", "error")
+    if len(new_password) < MIN_PASSWORD:
+        flash(f"A nova senha deve ter pelo menos {MIN_PASSWORD} caracteres.", "error")
         return render_template("auth/reset_password.html"), 400
-    if new_password != confirm:
+    if new_password != request.form.get("confirm_password", ""):
         flash("As senhas não coincidem.", "error")
         return render_template("auth/reset_password.html"), 400
-
     try:
         create_user_client(token).auth.update_user({"password": new_password})
     except Exception as exc:
-        logger.warning("Falha ao atualizar senha: %s", str(exc))
+        logger.info("Falha ao redefinir senha (%s).", type(exc).__name__)
         flash("Não foi possível alterar a senha. O link pode ter expirado.", "error")
         return render_template("auth/reset_password.html"), 400
-
-    flash("Senha atualizada. Faça login com a nova senha.", "success")
+    flash("Senha alterada. Entre com a nova senha.", "success")
     return redirect(url_for("auth.login"))
 
 
-@bp.get("/termos")
-def termos():
-    return render_template("legal/termos.html")
+@bp.get("/invite/<token>")
+def invite(token: str):
+    inv = organizations.find_invitation(token)
+    if not inv:
+        return render_template("auth/invite.html", invalid=True), 404
+    return render_template("auth/invite.html", inv=inv, token=token)
 
 
-@bp.get("/privacidade")
-def privacidade():
-    return render_template("legal/privacidade.html")
+@bp.post("/invite/<token>")
+@limiter.limit("10 per minute")
+def invite_accept(token: str):
+    if not g.get("user"):
+        return redirect(url_for("auth.login", next=url_for("auth.invite", token=token)))
+    try:
+        inv = organizations.accept_invitation(token, g.user)
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("auth.invite", token=token))
+    session.pop("pending_invite", None)
+    session[organizations.SESSION_ORG_KEY] = inv["organization_id"]
+    flash(f"Você agora faz parte de {inv.get('org_name') or 'uma nova organização'}.", "success")
+    return redirect(url_for("dashboard.overview"))
+
+
+@bp.post("/switch-org")
+def switch_org():
+    org_id = request.form.get("organization_id", "")
+    if g.get("user") and any(m["organization_id"] == org_id for m in g.get("memberships") or []):
+        session[organizations.SESSION_ORG_KEY] = org_id
+    return redirect(url_for("dashboard.overview"))

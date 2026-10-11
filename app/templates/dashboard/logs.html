@@ -1,55 +1,66 @@
-{% extends "base.html" %}
-{% block title %}Logs — AutoZap{% endblock %}
+{% extends "layouts/app.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Logs — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>Logs</h1>
-  <p>Requisições de API e eventos de webhook</p>
-</div>
+<div class="page-head"><div><h1>Logs</h1><p>Últimos 100 registros. Nenhum log guarda tokens, cabeçalhos de autenticação ou texto de mensagens.</p></div></div>
+<nav class="tabs" aria-label="Tipos de log">
+  <a href="{{ url_for('dashboard.logs', tab='api') }}" class="{% if tab == 'api' %}active{% endif %}">Requisições à API</a>
+  <a href="{{ url_for('dashboard.logs', tab='events') }}" class="{% if tab == 'events' %}active{% endif %}">Eventos da Meta</a>
+  <a href="{{ url_for('dashboard.logs', tab='audit') }}" class="{% if tab == 'audit' %}active{% endif %}">Auditoria</a>
+</nav>
 
-<h2 style="margin-bottom:12px;">Requisições de API</h2>
+{% if tab == 'api' %}
+<div class="row mb-2">
+  <a class="btn btn-sm {% if not status_filter %}btn-primary{% endif %}" href="{{ url_for('dashboard.logs', tab='api') }}">Todas</a>
+  <a class="btn btn-sm {% if status_filter == 'errors' %}btn-primary{% endif %}" href="{{ url_for('dashboard.logs', tab='api', status='errors') }}">Só erros</a>
+</div>
 {% if api_logs %}
-<div class="table-container">
-  <table>
-    <thead><tr><th>Horário</th><th>Método</th><th>Endpoint</th><th>Status</th><th>Latência</th><th>Request ID</th></tr></thead>
-    <tbody>
-      {% for r in api_logs %}
-      <tr>
-        <td>{{ r.created_at }}</td>
-        <td>{{ r.method }}</td>
-        <td>{{ r.endpoint }}</td>
-        <td>{{ r.status_code }}</td>
-        <td>{{ r.latency_ms or "—" }} ms</td>
-        <td><code style="font-size:0.8rem;">{{ r.request_id }}</code></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+<div class="card card-flush"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Quando</th><th>Requisição</th><th>Status</th><th class="num">Latência</th><th>Erro</th><th>Request ID</th></tr></thead>
+  <tbody>{% for r in api_logs %}
+  <tr>
+    <td class="nowrap">{{ r.created_at|dt('%d/%m %H:%M:%S') }}</td>
+    <td class="mono nowrap">{{ r.method }} {{ r.endpoint }}</td>
+    <td><span class="badge {% if r.status_code < 300 %}badge-ok{% elif r.status_code < 500 %}badge-warn{% else %}badge-danger{% endif %}">{{ r.status_code }}</span></td>
+    <td class="num">{{ r.latency_ms if r.latency_ms is not none else '—' }} ms</td>
+    <td>{% if r.error_code %}<code>{{ r.error_code }}</code>{% endif %}</td>
+    <td class="mono small">{{ r.request_id }}</td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
 {% else %}
-<div class="card empty-state">
-  <p>Nenhuma requisição registrada ainda.</p>
-</div>
+<div class="card"><div class="empty">{{ icon('code') }}<h3>Nenhuma requisição registrada</h3><p>Faça uma chamada com sua chave de API — por exemplo <code>GET /api/v1/me</code>.</p></div></div>
 {% endif %}
 
-<h2 style="margin-top:32px; margin-bottom:12px;">Eventos de webhook</h2>
-{% if webhook_events %}
-<div class="table-container">
-  <table>
-    <thead><tr><th>Horário</th><th>Evento</th><th>Status</th></tr></thead>
-    <tbody>
-      {% for e in webhook_events %}
-      <tr>
-        <td>{{ e.received_at }}</td>
-        <td>{{ e.event_type }}</td>
-        <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+{% elif tab == 'events' %}
+{% if events %}
+<div class="card card-flush"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Recebido</th><th>Evento</th><th>Tipo / status</th><th>Processamento</th></tr></thead>
+  <tbody>{% for e in events %}
+  <tr>
+    <td class="nowrap">{{ e.received_at|dt('%d/%m %H:%M:%S') }}</td>
+    <td><code>{{ e.event_type }}</code></td>
+    <td class="small">{{ e.payload.type or e.payload.status or e.payload.event or '—' }}</td>
+    <td>{% if e.status == 'processed' %}<span class="badge badge-ok">Processado</span>{% elif e.status == 'ignored' %}<span class="badge">Ignorado</span>{% else %}<span class="badge badge-danger">Erro</span>{% endif %}</td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
 {% else %}
-<div class="card empty-state">
-  <p>Nenhum evento recebido ainda.</p>
-</div>
+<div class="card"><div class="empty">{{ icon('activity') }}<h3>Nenhum evento recebido</h3><p>Confira se o webhook da Meta está configurado e se o número está inscrito (página do número → Saúde da conexão).</p></div></div>
+{% endif %}
+
+{% else %}
+{% if audits %}
+<div class="card card-flush"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Quando</th><th>Ação</th><th>Quem</th><th>Detalhes</th></tr></thead>
+  <tbody>{% for a in audits %}
+  <tr>
+    <td class="nowrap">{{ a.created_at|dt }}</td>
+    <td><code>{{ a.action }}</code></td>
+    <td class="small">{{ member_emails.get(a.actor_user_id) or ('Sistema' if not a.actor_user_id else 'Ex-membro') }}</td>
+    <td class="small muted">{% for k, v in (a.metadata or {}).items() %}{{ k }}: {{ v if v is string else v|tojson }}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
+{% else %}
+<div class="card"><div class="empty">{{ icon('shield') }}<p>Nenhuma ação registrada ainda.</p></div></div>
+{% endif %}
 {% endif %}
 {% endblock %}

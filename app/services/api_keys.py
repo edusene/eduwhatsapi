@@ -16,8 +16,18 @@ from app.services.security import hash_api_key
 from app.services.supabase_client import get_service_client
 
 VALID_ENVIRONMENTS = ("test", "live")
-DEFAULT_SCOPES = ["messages:send", "channels:read", "usage:read"]
-ALL_SCOPES = sorted(set(DEFAULT_SCOPES))
+SCOPES = {
+    "messages:send": "Enviar mensagens e marcar como lidas",
+    "messages:read": "Consultar mensagens e status de entrega",
+    "channels:read": "Listar números conectados",
+    "templates:read": "Listar modelos de mensagem",
+    "media:read": "Baixar mídias recebidas",
+    "media:write": "Enviar arquivos de mídia",
+    "conversations:read": "Ler conversas do chat (plano API + Chat)",
+    "usage:read": "Consultar uso da API",
+}
+ALL_SCOPES = sorted(SCOPES)
+DEFAULT_SCOPES = list(ALL_SCOPES)
 PREFIX_LEN = 16
 
 
@@ -53,7 +63,7 @@ def create_api_key(
     name = (name or "").strip()
     if not name or len(name) > 80:
         raise ValueError("Nome da chave é obrigatório (máx. 80 caracteres).")
-    scopes = scopes or list(DEFAULT_SCOPES)
+    scopes = sorted(set(scopes or DEFAULT_SCOPES))
     invalid = set(scopes) - set(ALL_SCOPES)
     if invalid:
         raise ValueError(f"Escopos inválidos: {sorted(invalid)}")
@@ -91,7 +101,8 @@ def verify_api_key(secret: str) -> dict[str, Any] | None:
     client = get_service_client()
     result = (
         client.table("api_keys")
-        .select("id, organization_id, name, environment, scopes, expires_at, revoked_at")
+        .select("id, organization_id, name, environment, scopes, expires_at, revoked_at,"
+                " last_used_at")
         .eq("key_hash", hash_api_key(secret))
         .execute()
     )
@@ -101,15 +112,23 @@ def verify_api_key(secret: str) -> dict[str, Any] | None:
     if record.get("revoked_at"):
         return None
     expires = record.get("expires_at")
-    if expires and expires < datetime.now(timezone.utc).isoformat():
+    if expires and _parse_ts(expires) < datetime.now(timezone.utc):
         return None
-    try:
-        client.table("api_keys").update(
-            {"last_used_at": datetime.now(timezone.utc).isoformat()}
-        ).eq("id", record["id"]).execute()
-    except Exception:
-        pass  # métrica de uso não deve bloquear a requisição
+    now = datetime.now(timezone.utc)
+    last_used = record.get("last_used_at")
+    # Grava no máximo 1x por minuto por chave para não gerar escrita a cada chamada.
+    if not last_used or (now - _parse_ts(last_used)).total_seconds() > 60:
+        try:
+            client.table("api_keys").update({"last_used_at": now.isoformat()}).eq(
+                "id", record["id"]).execute()
+        except Exception:
+            pass  # métrica de uso não deve bloquear a requisição
     return record
+
+
+def _parse_ts(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def list_api_keys(organization_id: str) -> list[dict[str, Any]]:

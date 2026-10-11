@@ -1,51 +1,60 @@
 # Deploy no Render
 
-## 1. Repositório
+## Antes de tudo: banco
 
-Envie o código para um repositório GitHub (ou GitLab). Certifique-se de que `.env` e segredos estão no `.gitignore`.
+1. Supabase → **SQL Editor → New query** → cole `supabase/schema.sql` → **Run**.
+   O arquivo é idempotente: rode-o de novo a cada atualização da plataforma.
+2. Supabase → **Authentication → URL Configuration**:
+   - Site URL: `https://SEU-DOMINIO`
+   - Redirect URLs: `https://SEU-DOMINIO/auth/callback` e `https://SEU-DOMINIO/reset-password`
 
-## 2. Criar Web Service no Render
+## Criar o serviço
 
-1. Acesse [dashboard.render.com](https://dashboard.render.com) e crie um **Web Service**.
-2. Conecte o repositório.
-3. Selecione **Python 3** como ambiente.
-4. Build command: `pip install -r requirements.txt`
-5. Start command: `gunicorn wsgi:app --workers 2 --threads 4 --timeout 60 --access-logfile - --error-logfile -`
-6. Configure o **health check path** como `/health`.
+**Opção A — Blueprint:** Render → New → **Blueprint** → selecione o repositório. O
+`render.yaml` cria o Web Service (`gunicorn wsgi:app`, health check `/health`) e gera
+`SECRET_KEY`, `API_KEY_PEPPER`, `META_WEBHOOK_VERIFY_TOKEN` e `CRON_SECRET`.
 
-## 3. Variáveis de ambiente
+**Opção B — manual:** New → Web Service → repositório →
+Build `pip install -r requirements.txt` · Start
+`gunicorn wsgi:app --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -` ·
+Health check `/health`.
 
-No painel do Render (Environment), defina TODAS as variáveis de `.env.example` com valores reais.
+## Variáveis obrigatórias (Environment)
 
-Importantes:
-- `APP_BASE_URL` = URL pública do Render (ex.: `https://autozap.onrender.com`).
-- `SESSION_COOKIE_SECURE` = `true` (HTTPS).
-- `META_REDIRECT_URI` = `https://.../connect/meta/callback`.
+| Variável | Valor |
+|---|---|
+| `FLASK_ENV` | `production` |
+| `APP_BASE_URL` | `https://SEU-DOMINIO` (sem barra final) |
+| `SECRET_KEY`, `API_KEY_PEPPER` | aleatórios (o Blueprint gera) |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | do Supabase |
+| `TOKEN_ENCRYPTION_KEY` | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `SESSION_COOKIE_SECURE` | `true` |
 
-NÃO inclua segredos no `render.yaml` (ele usa `sync: false` para valores sensíveis).
+Para a Meta: `META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN` e, quando aprovado,
+`META_ES_CONFIG_ID`. Em produção a aplicação **não sobe** se faltar alguma obrigatória — a
+mensagem de erro no log lista quais.
 
-## 4. Banco de dados Supabase
+## Depois do primeiro deploy
 
-1. Crie o projeto em [supabase.com](https://supabase.com).
-2. Acesse **SQL Editor > New query**.
-3. Cole o conteúdo de `supabase/schema.sql` e execute.
-4. Copie a **Project URL**, **anon key** e **service role key** para as variáveis de ambiente do Render.
+1. Abra `https://SEU-DOMINIO/health` → `{"status":"ok"}`.
+2. Configure o webhook da Meta (`docs/meta-setup.md`) com `https://SEU-DOMINIO/webhooks/meta`.
+3. Crie sua conta em `/register`.
+4. **Agendamentos** (recomendado): crie um *Cron Job* no Render (ou use qualquer agendador
+   externo) chamando:
+   - a cada 5 min: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://SEU-DOMINIO/internal/cron/deliver-webhooks`
+   - diariamente: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://SEU-DOMINIO/internal/cron/purge`
 
-## 5. Configuração do app da Meta
+## Domínio próprio e HTTPS
 
-1. No painel de desenvolvedor, cadastre:
-   - Redirect URI OAuth: `https://.../connect/meta/callback`
-   - Webhook URL: `https://.../webhooks/meta`
-   - Verify token: o valor de `META_WEBHOOK_VERIFY_TOKEN`
-2. Assine os campos de webhook desejados (mensagens, status).
-
-## 6. Primeiro deploy
-
-1. Faça push do código.
-2. O Render faz o build automaticamente.
-3. Acesse a URL pública e crie a primeira conta (registro).
+Settings → Custom Domains → adicione o domínio e crie o CNAME indicado no seu DNS. O Render
+emite o certificado. Depois atualize `APP_BASE_URL`, as URLs do Supabase Auth, o webhook da
+Meta e os domínios permitidos do SDK JavaScript (Embedded Signup).
 
 ## Observações
 
-- O sistema de arquivos local do Render é efêmero. Todos os dados persistentes devem ficar no Supabase.
-- Em produção, configure um storage de rate limiting externo (Redis) se o tráfego crescer.
+- O disco do Render é efêmero: todo dado persistente fica no Supabase.
+- **Plano gratuito hiberna** após inatividade: o primeiro webhook da Meta pode demorar e
+  retries de saída só rodam com o serviço acordado. O cron externo acima também o mantém ativo.
+  Para produção real, use um plano pago.
+- Com mais de uma instância, configure Redis em `RATE_LIMIT_STORAGE_URI`.
+- Logs vão para stdout/stderr (aba Logs do Render).

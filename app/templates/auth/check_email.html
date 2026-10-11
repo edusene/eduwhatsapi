@@ -1,0 +1,11 @@
+{% extends "layouts/auth.html" %}
+{% block title %}Confirme seu e-mail — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="empty" style="padding:0;text-align:left">
+  <div class="channel-logo" style="background:var(--brand-soft);color:var(--brand-strong);margin-bottom:16px">{{ icon('mail') }}</div>
+  <h1>Confirme seu e-mail</h1>
+  <p class="sub" style="margin:0 0 20px">Enviamos um link de confirmação para <strong>{{ email }}</strong>. Clique nele para ativar a conta — você entrará automaticamente.</p>
+  <p class="small muted">Não chegou? Verifique a caixa de spam ou aguarde alguns minutos. O link expira conforme a configuração do Supabase Auth.</p>
+  <a class="btn btn-block mt-2" href="{{ url_for('auth.login') }}">Ir para o login</a>
+</div>
+{% endblock %}

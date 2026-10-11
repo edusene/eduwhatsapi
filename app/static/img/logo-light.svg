@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 32" width="160" height="32" role="img" aria-label="AutoZap">
+  <rect x="0" y="2" width="28" height="28" rx="8" fill="#ffffff"/>
+  <path d="M8.2 23.6 9.3 20a7.2 7.2 0 1 1 2.7 2.5Z" fill="none" stroke="#0b7f5a" stroke-width="1.9" stroke-linejoin="round"/>
+  <path d="M15.6 10.4 12.6 16.2h3l-1.2 4.4 4-6.1h-3.1l1.3-4.1Z" fill="#0b7f5a"/>
+  <text x="37" y="23.5" fill="#ffffff" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" font-size="20" font-weight="750" letter-spacing="-0.4">AutoZap</text>
+</svg>

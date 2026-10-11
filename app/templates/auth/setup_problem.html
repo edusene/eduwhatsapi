@@ -1,0 +1,17 @@
+{% extends "layouts/auth.html" %}
+{% block title %}Configuração pendente — {{ app_name }}{% endblock %}
+{% block content %}
+<h1>Não conseguimos carregar sua empresa</h1>
+<p class="sub">Sua conta está ativa, mas o banco de dados não respondeu como esperado.</p>
+<div class="alert alert-warning">{{ icon('alert') }}<div>
+  <p><strong>Se você é o administrador da plataforma:</strong> execute o arquivo <code>supabase/schema.sql</code> no SQL Editor do Supabase e confira as variáveis <code>SUPABASE_URL</code> e <code>SUPABASE_SERVICE_ROLE_KEY</code>.</p>
+  <p>Depois disso, basta recarregar esta página.</p>
+</div></div>
+<div class="row">
+  <a class="btn btn-primary" href="{{ url_for('dashboard.overview') }}">Tentar novamente</a>
+  <form method="post" action="{{ url_for('auth.logout') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn" type="submit">Sair</button>
+  </form>
+</div>
+{% endblock %}

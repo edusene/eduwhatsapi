@@ -1,0 +1,10 @@
+{% extends "layouts/auth.html" %}
+{% block title %}Confirmando — {{ app_name }}{% endblock %}
+{% block content %}
+<div id="callbackState" data-session-url="{{ url_for('auth.auth_session') }}" data-reset-url="{{ url_for('auth.reset_password') }}" data-login-url="{{ url_for('auth.login') }}">
+  <h1>Confirmando seu acesso…</h1>
+  <p class="sub" id="callbackMsg">Aguarde um instante.</p>
+</div>
+<noscript><div class="alert alert-error">Esta página precisa de JavaScript para concluir a confirmação.</div></noscript>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/auth-callback.js') }}" defer></script>{% endblock %}

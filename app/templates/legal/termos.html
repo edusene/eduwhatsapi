@@ -1,11 +1,11 @@
-{% extends "base.html" %}
+{% extends "layouts/public.html" %}
 {% block title %}Termos de Serviço — AutoZap{% endblock %}
-{% block auth_content %}
-<div class="legal-page">
+{% block content %}
+<div class="legal">
   <div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
 
-  <h2 class="auth-title">Termos de Serviço</h2>
-  <p class="legal-updated">Última atualização: {{ now.strftime('%d/%m/%Y') if now else '10/10/2026' }}</p>
+  <h1>Termos de Serviço</h1>
+  <p class="muted">Última atualização: {{ now.strftime('%d/%m/%Y') if now else '10/10/2026' }}</p>
 
   <div class="legal-content">
     <section>
@@ -76,7 +76,7 @@
   <div class="form-links">
     <a href="{{ url_for('auth.login') }}">Voltar ao login</a>
     <span class="divider">•</span>
-    <a href="{{ url_for('auth.privacidade') }}">Política de Privacidade</a>
+    <a href="{{ url_for('public.privacidade') }}">Política de Privacidade</a>
   </div>
 </div>
 {% endblock %}

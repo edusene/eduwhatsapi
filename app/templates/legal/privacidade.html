@@ -1,11 +1,11 @@
-{% extends "base.html" %}
+{% extends "layouts/public.html" %}
 {% block title %}Política de Privacidade — AutoZap{% endblock %}
-{% block auth_content %}
-<div class="legal-page">
+{% block content %}
+<div class="legal">
   <div class="alert alert-warning">Modelo editável — não constitui aconselhamento jurídico. Revise com um advogado antes de publicar.</div>
 
-  <h2 class="auth-title">Política de Privacidade</h2>
-  <p class="legal-updated">Última atualização: {{ now.strftime('%d/%m/%Y') if now else '10/10/2026' }}</p>
+  <h1>Política de Privacidade</h1>
+  <p class="muted">Última atualização: {{ now.strftime('%d/%m/%Y') if now else '10/10/2026' }}</p>
 
   <div class="legal-content">
     <section>
@@ -24,7 +24,12 @@
         <li><strong>Logs de requisições:</strong> organização, chave identificada (sem segredo), endpoint, status, latência, timestamp e erros sanitizados.</li>
         <li><strong>Eventos de webhook:</strong> identificadores de deduplicação, tipo de evento e payload mínimo necessário ao processamento.</li>
       </ul>
-      <p><strong>Não armazenamos o conteúdo completo de mensagens</strong> trocadas entre você e seus destinatários, salvo quando estritamente necessário para entrega de eventos.</p>
+      <p><strong>Conteúdo de mensagens depende do plano contratado:</strong></p>
+      <ul>
+        <li><strong>Plano API Oficial:</strong> armazenamos apenas metadados (identificadores, tipo, status de entrega e número do contato). O conteúdo é repassado ao webhook configurado pelo cliente e fica apenas na fila de entrega pelo tempo necessário às tentativas (até 30 dias).</li>
+        <li><strong>Plano API + Chat:</strong> armazenamos o conteúdo das mensagens, o nome de perfil e o número dos contatos para exibir o histórico na caixa de entrada, pelo prazo de retenção definido pela empresa cliente (padrão de 90 dias). Mídias não são copiadas: são baixadas da Meta sob demanda enquanto ela as disponibilizar.</li>
+      </ul>
+      <p>A empresa cliente pode apagar todo o histórico a qualquer momento em Configurações.</p>
     </section>
 
     <section>
@@ -90,7 +95,7 @@
   <div class="form-links">
     <a href="{{ url_for('auth.login') }}">Voltar ao login</a>
     <span class="divider">•</span>
-    <a href="{{ url_for('auth.termos') }}">Termos de Serviço</a>
+    <a href="{{ url_for('public.termos') }}">Termos de Serviço</a>
   </div>
 </div>
 {% endblock %}

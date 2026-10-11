@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import time
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from app.meta.graph_api import MetaAPIError
 from app.services.supabase_client import get_service_client
@@ -71,31 +71,30 @@ def _log_request(response):
 # ---------------------------------------------------------------------------
 @bp.errorhandler(MetaAPIError)
 def _handle_meta_error(exc: MetaAPIError):
-    logger.warning(
-        "Erro da Meta Graph API (http=%s fb_code=%s fb_subcode=%s timeout=%s).",
-        exc.http_status, exc.fb_code, exc.fb_subcode, exc.is_timeout,
-    )
+    logger.warning("Erro da Meta Graph API (http=%s code=%s subcode=%s timeout=%s).",
+                   exc.http_status, exc.fb_code, exc.fb_subcode, exc.is_timeout)
     if exc.is_timeout:
-        return error_response(
-            "gateway_timeout",
-            "A Meta demorou para responder. Tente novamente.",
-            504,
-        )
-    return error_response(
-        "meta_api_error",
-        "A Meta recusou a operação. Verifique o canal e tente novamente.",
-        502,
-        fb_code=exc.fb_code,
-    )
+        return error_response("meta_timeout",
+                              "A Meta não respondeu a tempo. A mensagem pode ou não ter sido "
+                              "enviada; use Idempotency-Key para repetir com segurança.", 504)
+    status = 429 if exc.fb_code in (4, 80007, 130429, 131048, 131056) else 502
+    return error_response("meta_api_error", "A Meta recusou a operação.", status,
+                          meta_error=exc.as_dict())
 
 
-# Registrado após import de schemas (evita dependência circular no topo).
 from app.api.schemas import ValidationError  # noqa: E402
+from app.services.connections import ConnectionError_  # noqa: E402
 
 
 @bp.errorhandler(ValidationError)
 def _handle_validation_error(exc: ValidationError):
-    return error_response(exc.code, str(exc), 400)
+    extra = {"field": exc.field} if exc.field else {}
+    return error_response(exc.code, str(exc), 400, **extra)
+
+
+@bp.errorhandler(ConnectionError_)
+def _handle_connection_error(exc: ConnectionError_):
+    return error_response("channel_unavailable", str(exc), 409)
 
 
 from app.api import routes  # noqa: E402,F401
