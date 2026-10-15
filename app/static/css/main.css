@@ -659,6 +659,74 @@ details.data-table summary { cursor: pointer; font-size: .82rem; color: var(--te
   .page-head { align-items: flex-start; }
   .table th, .table td { padding: 10px 12px; }
 }
+/* ==========================================================================
+   Movimento: navegação, modais, avisos, carregamento
+   ========================================================================== */
+/* Barra de progresso de navegação */
+.page-progress {
+  position: fixed; top: 0; left: 0; z-index: 200; height: 3px; width: 0; opacity: 0; pointer-events: none;
+  background: linear-gradient(90deg, var(--brand), color-mix(in srgb, var(--brand) 55%, #7cf0c5));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--brand) 60%, transparent);
+  border-radius: 0 3px 3px 0;
+}
+.page-progress.is-active { opacity: 1; width: 82%; transition: width 6s cubic-bezier(.08, .7, .15, 1), opacity .15s; }
+.page-progress.is-done { width: 100%; opacity: 0; transition: width .2s ease-out, opacity .35s ease .2s; }
+
+/* Entrada do conteúdo e saída ao navegar */
+#conteudo { animation: page-in .32s cubic-bezier(.2, .7, .2, 1) both; }
+body.is-navigating #conteudo {
+  opacity: .45; transform: translateY(4px); filter: saturate(.85);
+  transition: opacity .18s ease, transform .18s ease, filter .18s ease;
+  pointer-events: none;
+}
+body.is-navigating { cursor: progress; }
+@keyframes page-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* Itens interativos com resposta suave */
+.nav a, .tabs a, .conv, .tpl-item, .check-card, .plan-option, .option-card { transition: background .15s, color .15s, border-color .15s, box-shadow .15s; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.card.channel-card, .option-card, .feature, .plan { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.card.channel-card:hover, .feature:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+
+/* Modais */
+dialog.modal[open] { animation: modal-in .2s cubic-bezier(.2, .8, .2, 1); }
+dialog.modal[open]::backdrop { animation: fade-in .2s ease; }
+dialog.modal.is-closing { animation: modal-out .15s ease-in forwards; }
+dialog.modal.is-closing::backdrop { animation: fade-out .15s ease-in forwards; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(10px) scale(.97); } }
+@keyframes modal-out { to { opacity: 0; transform: translateY(6px) scale(.98); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+
+/* Avisos (saída) */
+.toast.is-leaving { animation: toast-out .2s ease-in forwards; }
+@keyframes toast-out { to { opacity: 0; transform: translateX(16px); } }
+
+/* Esqueletos de carregamento */
+.skeleton {
+  display: block; border-radius: 6px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite;
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.conv-skel { display: flex; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); align-items: center; }
+.conv-skel .skeleton.avatar-sk { width: 42px; height: 42px; border-radius: 50%; flex: none; }
+.conv-skel .lines { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.bubble-skel { height: 38px; border-radius: 10px; }
+.bubble-skel.in { align-self: flex-start; width: 46%; }
+.bubble-skel.out { align-self: flex-end; width: 38%; }
+.spinner {
+  display: inline-block; width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; margin-right: 8px;
+  border: 2px solid var(--border-strong); border-top-color: var(--brand); animation: spin .7s linear infinite;
+}
+
+/* Chat: novas mensagens e troca de conversa */
+.bubble.is-new { animation: bubble-in .22s cubic-bezier(.2, .8, .2, 1); }
+.bubble.out.is-new { transform-origin: bottom right; }
+.bubble:not(.out).is-new { transform-origin: bottom left; }
+@keyframes bubble-in { from { opacity: 0; transform: translateY(6px) scale(.96); } }
+.chat:not([hidden]) { animation: fade-in .2s ease; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

@@ -23,7 +23,11 @@
         </div>
       </div>
       <div class="conv-list" id="convList" aria-live="polite">
-        <div class="empty">Carregando…</div>
+        <span class="sr-only">Carregando conversas…</span>
+        <div class="conv-skel" aria-hidden="true"><span class="skeleton avatar-sk"></span><div class="lines"><span class="skeleton" style="height:12px;width:55%"></span><span class="skeleton" style="height:10px;width:80%"></span></div></div>
+        <div class="conv-skel" aria-hidden="true"><span class="skeleton avatar-sk"></span><div class="lines"><span class="skeleton" style="height:12px;width:40%"></span><span class="skeleton" style="height:10px;width:65%"></span></div></div>
+        <div class="conv-skel" aria-hidden="true"><span class="skeleton avatar-sk"></span><div class="lines"><span class="skeleton" style="height:12px;width:62%"></span><span class="skeleton" style="height:10px;width:72%"></span></div></div>
+        <div class="conv-skel" aria-hidden="true"><span class="skeleton avatar-sk"></span><div class="lines"><span class="skeleton" style="height:12px;width:48%"></span><span class="skeleton" style="height:10px;width:58%"></span></div></div>
       </div>
     </aside>
 
@@ -70,7 +74,7 @@
 <dialog class="modal" id="templateDialog" aria-labelledby="tplDlgTitle">
   <div class="modal-head"><h2 id="tplDlgTitle">Enviar modelo</h2><button class="btn btn-ghost btn-icon" type="button" data-close aria-label="Fechar">{{ icon('x') }}</button></div>
   <div class="modal-body">
-    <div class="tpl-list" id="tplList"><div class="muted">Carregando modelos…</div></div>
+    <div class="tpl-list" id="tplList"><div class="muted"><span class="spinner"></span>Carregando modelos…</div></div>
     <div id="tplParams"></div>
     <div class="alert alert-error" id="tplError" hidden>{{ icon('error') }}<div id="tplErrorText"></div></div>
   </div>
@@ -86,7 +90,7 @@
         <select id="newChannel">{% for c in channels %}<option value="{{ c.id }}">{{ c.display_phone_number or c.phone_number_id }}{% if c.verified_name %} — {{ c.verified_name }}{% endif %}</option>{% endfor %}</select></div>
       <div class="field"><label for="newTo">Contato</label><input id="newTo" inputmode="tel" placeholder="5511999998888"></div>
     </div>
-    <div class="tpl-list" id="newTplList"><div class="muted">Carregando modelos…</div></div>
+    <div class="tpl-list" id="newTplList"><div class="muted"><span class="spinner"></span>Carregando modelos…</div></div>
     <div id="newTplParams"></div>
     <div class="alert alert-error" id="newError" hidden>{{ icon('error') }}<div id="newErrorText"></div></div>
   </div>

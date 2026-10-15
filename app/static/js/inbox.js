@@ -37,7 +37,9 @@
     messages: {},       // id -> mensagem
     lastUpdated: null,  // maior updated_at visto (para ?after=)
     windowOpen: false,
-    sending: false
+    sending: false,
+    seen: {},           // ids já desenhados (só mensagens novas animam)
+    seenReady: false
   };
 
   // ------------------------------------------------------------------ util
@@ -153,8 +155,13 @@
     state.activeId = id;
     state.active = state.conversations.find(function (c) { return c.id === id; }) || null;
     state.messages = {};
+    state.seen = {};
+    state.seenReady = false;
     state.lastUpdated = null;
     els.messages.innerHTML = '';
+    ['in', 'out', 'in', 'out', 'in'].forEach(function (side) {
+      els.messages.appendChild(el('div', 'skeleton bubble-skel ' + side));
+    });
     els.empty.hidden = true;
     els.chat.hidden = false;
     root.classList.add('has-active');
@@ -294,7 +301,9 @@
       var d = parseDate(m.created_at) || new Date();
       var day = d.toDateString();
       if (day !== lastDay) { els.messages.appendChild(el('div', 'day-sep', dayLabel(d))); lastDay = day; }
-      var bubble = el('div', 'bubble' + (m.direction === 'outbound' ? ' out' : ''));
+      var fresh = state.seenReady && !state.seen[m.id];
+      state.seen[m.id] = true;
+      var bubble = el('div', 'bubble' + (m.direction === 'outbound' ? ' out' : '') + (fresh ? ' is-new' : ''));
       renderContent(m, bubble);
       if (m.status === 'failed') {
         var reason = (m.error && (m.error.message || m.error.title)) || 'Falha no envio';
@@ -306,6 +315,7 @@
       bubble.appendChild(meta);
       els.messages.appendChild(bubble);
     });
+    state.seenReady = true;
   }
 
   // ----------------------------------------------------------------- envio
@@ -371,7 +381,10 @@
   function templatePicker(listEl, paramsEl, sendBtn, connectionId) {
     var picked = null;
     listEl.innerHTML = '';
-    listEl.appendChild(el('div', 'muted', 'Carregando modelos…'));
+    var loading = el('div', 'muted');
+    loading.appendChild(el('span', 'spinner'));
+    loading.appendChild(document.createTextNode('Carregando modelos…'));
+    listEl.appendChild(loading);
     paramsEl.innerHTML = '';
     sendBtn.disabled = true;
     AZ.json(API + '/templates?connection_id=' + encodeURIComponent(connectionId)).then(function (data) {
@@ -443,7 +456,7 @@
     tplSend.disabled = true; tplSend.classList.add('is-loading');
     AZ.json(API + '/conversations/' + state.activeId + '/messages', { method: 'POST', body: { type: 'template', template: tpl } })
       .then(function (data) {
-        tplDialog.close();
+        AZ.closeDialog(tplDialog);
         state.messages[data.message.id] = data.message;
         renderMessages();
         els.messages.scrollTop = els.messages.scrollHeight;
@@ -477,7 +490,7 @@
       newSend.disabled = true; newSend.classList.add('is-loading');
       AZ.json(API + '/conversations/new', { method: 'POST', body: { connection_id: newChannel.value, to: to, template: tpl } })
         .then(function (data) {
-          newDialog.close();
+          AZ.closeDialog(newDialog);
           AZ.toast('Conversa iniciada.', 'success');
           state.filter = 'open';
           setFilterButtons();

@@ -51,17 +51,84 @@
     autoDismiss(el);
   };
 
+  function dismissToast(el) {
+    if (!el || el.classList.contains('is-leaving')) return;
+    el.classList.add('is-leaving');
+    setTimeout(function () { el.remove(); }, 200);
+  }
   function autoDismiss(el) {
     var isError = el.classList.contains('toast-error');
-    setTimeout(function () { el.remove(); }, isError ? 9000 : 5000);
+    setTimeout(function () { dismissToast(el); }, isError ? 9000 : 5000);
   }
   document.querySelectorAll('.toast').forEach(autoDismiss);
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('.toast-close');
-    if (btn) btn.closest('.toast').remove();
+    if (btn) dismissToast(btn.closest('.toast'));
   });
 
+  // ------------------------------------------------------------------
+  // Navegação: barra de progresso, saída/entrada do conteúdo e aba ativa
+  // imediata. O servidor continua renderizando as páginas; isto só dá
+  // retorno visual instantâneo enquanto a próxima página carrega.
+  // ------------------------------------------------------------------
+  var NAV_KEY = 'az-nav';
+  var bar = document.createElement('div');
+  bar.className = 'page-progress';
+  bar.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(bar);
+
+  function startNav() {
+    document.body.classList.add('is-navigating');
+    bar.classList.remove('is-done');
+    void bar.offsetWidth; // reinicia a transição
+    bar.classList.add('is-active');
+    try { sessionStorage.setItem(NAV_KEY, '1'); } catch (err) { /* armazenamento indisponível */ }
+  }
+  function resetNav() {
+    document.body.classList.remove('is-navigating');
+    bar.classList.remove('is-active', 'is-done');
+  }
+  AZ.startNav = startNav;
+
+  // Chegou por navegação interna: conclui a barra em vez de sumir de repente.
+  var cameFromNav = false;
+  try { cameFromNav = sessionStorage.getItem(NAV_KEY) === '1'; sessionStorage.removeItem(NAV_KEY); } catch (err) { /* idem */ }
+  if (cameFromNav) {
+    bar.classList.add('is-active');
+    requestAnimationFrame(function () { requestAnimationFrame(function () { bar.classList.add('is-done'); }); });
+  }
+
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest('a[href]');
+    if (!a || a.hasAttribute('download') || (a.target && a.target !== '_self')) return;
+    var url;
+    try { url = new URL(a.href, window.location.href); } catch (err) { return; }
+    if (url.origin !== window.location.origin) return;
+    if (url.pathname === window.location.pathname && url.search === window.location.search) return; // âncora na mesma página
+    var navItem = a.closest('.nav');
+    if (navItem) {
+      navItem.querySelectorAll('a.active').forEach(function (x) { x.classList.remove('active'); x.removeAttribute('aria-current'); });
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+    var tabs = a.closest('.tabs');
+    if (tabs) {
+      tabs.querySelectorAll('a.active').forEach(function (x) { x.classList.remove('active'); });
+      a.classList.add('active');
+    }
+    startNav();
+  });
+  window.addEventListener('pageshow', function (e) { if (e.persisted) resetNav(); });
+
   // Diálogos: [data-open="id"] abre; [data-close] fecha; clique no fundo fecha.
+  // O fechamento espera a animação de saída terminar.
+  function closeDialog(d) {
+    if (!d || !d.open || d.classList.contains('is-closing')) return;
+    d.classList.add('is-closing');
+    setTimeout(function () { d.classList.remove('is-closing'); d.close(); }, 150);
+  }
+  AZ.closeDialog = closeDialog;
   document.addEventListener('click', function (e) {
     var opener = e.target.closest('[data-open]');
     if (opener) {
@@ -77,13 +144,12 @@
     }
     var closer = e.target.closest('[data-close]');
     if (closer) {
-      var d = closer.closest('dialog');
-      if (d) d.close();
+      closeDialog(closer.closest('dialog'));
       return;
     }
     if (e.target.tagName === 'DIALOG' && e.target.open) {
       var r = e.target.getBoundingClientRect();
-      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.target.close();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeDialog(e.target);
     }
   });
 
@@ -105,6 +171,7 @@
     if (btn) {
       setTimeout(function () { btn.disabled = true; btn.classList.add('is-loading'); }, 0);
     }
+    if ((form.getAttribute('method') || '').toLowerCase() !== 'dialog') startNav();
   });
   window.addEventListener('pageshow', function () {
     document.querySelectorAll('.is-loading').forEach(function (b) { b.disabled = false; b.classList.remove('is-loading'); });
@@ -112,7 +179,7 @@
 
   // Selects que enviam o formulário ao mudar.
   document.querySelectorAll('select[data-autosubmit]').forEach(function (sel) {
-    sel.addEventListener('change', function () { sel.form.submit(); });
+    sel.addEventListener('change', function () { startNav(); sel.form.submit(); });
   });
 
   // Copiar para a área de transferência.
