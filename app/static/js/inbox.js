@@ -517,10 +517,20 @@
   });
 
   // --------------------------------------------------------------- polling
+  // Para de consultar o servidor quando o usuário sai do chat (o painel troca
+  // de página sem recarregar, então este script deixa de existir na tela).
+  var timers = [];
+  function alive() {
+    if (document.body.contains(root)) return true;
+    timers.forEach(clearInterval);
+    document.removeEventListener('visibilitychange', onVisible);
+    return false;
+  }
   function visible() { return document.visibilityState === 'visible'; }
-  setInterval(function () { if (visible()) loadConversations(); }, 6000);
-  setInterval(function () { if (visible() && state.activeId) loadMessages(false); }, 3000);
-  document.addEventListener('visibilitychange', function () { if (visible()) { loadConversations(); loadMessages(false); } });
+  function onVisible() { if (alive() && visible()) { loadConversations(); loadMessages(false); } }
+  timers.push(setInterval(function () { if (alive() && visible()) loadConversations(); }, 6000));
+  timers.push(setInterval(function () { if (alive() && visible() && state.activeId) loadMessages(false); }, 3000));
+  document.addEventListener('visibilitychange', onVisible);
   loadConversations().then(function () {
     var m = /^#c=([0-9a-fA-F-]{32,36})$/.exec(window.location.hash);
     if (m) openConversation(m[1]);

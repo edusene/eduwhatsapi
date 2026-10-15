@@ -673,14 +673,22 @@ details.data-table summary { cursor: pointer; font-size: .82rem; color: var(--te
 .page-progress.is-done { width: 100%; opacity: 0; transition: width .2s ease-out, opacity .35s ease .2s; }
 
 /* Entrada do conteúdo e saída ao navegar */
-#conteudo { animation: page-in .32s cubic-bezier(.2, .7, .2, 1) both; }
+/* fill-mode "backwards": após entrar, a animação não segura a opacidade e a
+   transição de saída consegue acontecer. */
+#conteudo { animation: page-in .34s cubic-bezier(.16, .84, .3, 1) backwards; }
+#conteudo:focus { outline: none; }
+/* Saída na troca de conteúdo do painel (sem recarregar a página) */
+#conteudo.is-leaving {
+  opacity: 0; transform: translateY(-6px); pointer-events: none;
+  transition: opacity .17s ease-in, transform .17s ease-in;
+}
 body.is-navigating #conteudo {
   opacity: .45; transform: translateY(4px); filter: saturate(.85);
   transition: opacity .18s ease, transform .18s ease, filter .18s ease;
   pointer-events: none;
 }
 body.is-navigating { cursor: progress; }
-@keyframes page-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes page-in { from { opacity: 0; transform: translateY(10px); } }
 
 /* Itens interativos com resposta suave */
 .nav a, .tabs a, .conv, .tpl-item, .check-card, .plan-option, .option-card { transition: background .15s, color .15s, border-color .15s, box-shadow .15s; }

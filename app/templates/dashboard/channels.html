@@ -116,6 +116,7 @@
      data-version="{{ graph_version }}"
      data-endpoint="{{ url_for('meta_connect.embedded_signup') }}"></div>
 {% endblock %}
+{% block head %}{% if es_enabled %}<meta name="az-full-reload" content="1">{% endif %}{% endblock %}
 {% block scripts %}
 {% if es_enabled %}<script src="{{ url_for('static', filename='js/embedded-signup.js') }}" defer></script>{% endif %}
 {% endblock %}

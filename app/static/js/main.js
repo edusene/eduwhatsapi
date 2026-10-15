@@ -27,6 +27,11 @@
       });
     });
   };
+
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, reduceMotion ? 0 : ms); }); }
+
+  // ------------------------------------------------------------------ avisos
   AZ.toast = function (message, kind) {
     var box = document.querySelector('.toasts');
     if (!box) {
@@ -50,7 +55,6 @@
     box.appendChild(el);
     autoDismiss(el);
   };
-
   function dismissToast(el) {
     if (!el || el.classList.contains('is-leaving')) return;
     el.classList.add('is-leaving');
@@ -60,73 +64,219 @@
     var isError = el.classList.contains('toast-error');
     setTimeout(function () { dismissToast(el); }, isError ? 9000 : 5000);
   }
-  document.querySelectorAll('.toast').forEach(autoDismiss);
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('.toast-close');
     if (btn) dismissToast(btn.closest('.toast'));
   });
 
-  // ------------------------------------------------------------------
-  // Navegação: barra de progresso, saída/entrada do conteúdo e aba ativa
-  // imediata. O servidor continua renderizando as páginas; isto só dá
-  // retorno visual instantâneo enquanto a próxima página carrega.
-  // ------------------------------------------------------------------
+  // ------------------------------------------------------- barra de progresso
   var NAV_KEY = 'az-nav';
   var bar = document.createElement('div');
   bar.className = 'page-progress';
   bar.setAttribute('aria-hidden', 'true');
   document.body.appendChild(bar);
 
-  function startNav() {
-    document.body.classList.add('is-navigating');
+  function startBar() {
     bar.classList.remove('is-done');
     void bar.offsetWidth; // reinicia a transição
     bar.classList.add('is-active');
+  }
+  function finishBar() {
+    if (!bar.classList.contains('is-active')) return;
+    bar.classList.add('is-done');
+    setTimeout(function () {
+      if (bar.classList.contains('is-done')) bar.classList.remove('is-active', 'is-done');
+    }, 600);
+  }
+  // Navegação tradicional (formulários, páginas fora do painel).
+  function startNav() {
+    document.body.classList.add('is-navigating');
+    startBar();
     try { sessionStorage.setItem(NAV_KEY, '1'); } catch (err) { /* armazenamento indisponível */ }
   }
-  function resetNav() {
-    document.body.classList.remove('is-navigating');
-    bar.classList.remove('is-active', 'is-done');
-  }
   AZ.startNav = startNav;
-
-  // Chegou por navegação interna: conclui a barra em vez de sumir de repente.
   var cameFromNav = false;
   try { cameFromNav = sessionStorage.getItem(NAV_KEY) === '1'; sessionStorage.removeItem(NAV_KEY); } catch (err) { /* idem */ }
   if (cameFromNav) {
     bar.classList.add('is-active');
-    requestAnimationFrame(function () { requestAnimationFrame(function () { bar.classList.add('is-done'); }); });
+    requestAnimationFrame(function () { requestAnimationFrame(finishBar); });
+  }
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) { document.body.classList.remove('is-navigating'); bar.classList.remove('is-active', 'is-done'); }
+    document.querySelectorAll('.is-loading').forEach(function (b) { b.disabled = false; b.classList.remove('is-loading'); });
+  });
+
+  // ------------------------------------------------------------------
+  // Navegação do painel sem recarregar a página: o menu lateral fica fixo,
+  // o conteúdo atual sai animado enquanto o próximo é buscado em paralelo
+  // e o novo entra animado. O servidor continua renderizando o HTML (mesma
+  // autorização de sempre). Em qualquer falha, cai na navegação normal.
+  // ------------------------------------------------------------------
+  var appShell = document.querySelector('.app');
+  var mainEl = document.querySelector('.app .main');
+  var swapEnabled = !!(appShell && mainEl && window.fetch && window.DOMParser && history.pushState);
+  var prefetchCache = {};           // url -> { promise, at }
+  var PREFETCH_TTL = 15000;
+  var navToken = 0;
+
+  function eligibleLink(a) {
+    if (!a || a.hasAttribute('download') || a.hasAttribute('data-no-swap')) return null;
+    if (a.target && a.target !== '_self') return null;
+    var url;
+    try { url = new URL(a.href, window.location.href); } catch (err) { return null; }
+    if (url.origin !== window.location.origin) return null;
+    return url;
+  }
+  function isPanelUrl(url) { return url.pathname.indexOf('/dashboard') === 0; }
+
+  function fetchPage(href) {
+    var key = href.split('#')[0];
+    var hit = prefetchCache[key];
+    if (hit && Date.now() - hit.at < PREFETCH_TTL) { delete prefetchCache[key]; return hit.promise; }
+    return fetch(key, { credentials: 'same-origin', headers: { 'Accept': 'text/html', 'X-AZ-Nav': '1' } })
+      .then(function (resp) { return resp.text().then(function (html) { return { resp: resp, html: html }; }); });
+  }
+  function prefetch(href) {
+    var key = href.split('#')[0];
+    var hit = prefetchCache[key];
+    if (hit && Date.now() - hit.at < PREFETCH_TTL) return;
+    var promise = fetch(key, { credentials: 'same-origin', headers: { 'Accept': 'text/html', 'X-AZ-Nav': '1' } })
+      .then(function (resp) { return resp.text().then(function (html) { return { resp: resp, html: html }; }); });
+    promise.catch(function () { delete prefetchCache[key]; });
+    prefetchCache[key] = { promise: promise, at: Date.now() };
+  }
+
+  function markActive(a) {
+    var nav = a && a.closest('.nav');
+    if (nav) {
+      nav.querySelectorAll('a.active').forEach(function (x) { x.classList.remove('active'); x.removeAttribute('aria-current'); });
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+    var tabs = a && a.closest('.tabs');
+    if (tabs) {
+      tabs.querySelectorAll('a.active').forEach(function (x) { x.classList.remove('active'); });
+      a.classList.add('active');
+    }
+  }
+
+  function hardNavigate(href) {
+    startNav();
+    window.location.assign(href);
+  }
+
+  function swapTo(href, options) {
+    options = options || {};
+    var token = ++navToken;
+    var content = document.getElementById('conteudo');
+    startBar();
+    if (content) content.classList.add('is-leaving');
+    setMenu(false);
+
+    return Promise.all([fetchPage(href), wait(170)]).then(function (results) {
+      if (token !== navToken) return; // outro clique mais recente venceu
+      var resp = results[0].resp;
+      var finalUrl = new URL(resp.url || href, window.location.href);
+      var type = resp.headers.get('Content-Type') || '';
+      if (type.indexOf('text/html') === -1 || !isPanelUrl(finalUrl)) { hardNavigate(finalUrl.href); return; }
+      var doc = new DOMParser().parseFromString(results[0].html, 'text/html');
+      var newMain = doc.querySelector('.app .main');
+      if (!newMain || doc.querySelector('meta[name="az-full-reload"]')) { hardNavigate(finalUrl.href); return; }
+
+      // Troca o conteúdo (mantém a barra superior do celular).
+      Array.prototype.slice.call(mainEl.children).forEach(function (child) {
+        if (!child.classList.contains('topbar')) child.remove();
+      });
+      Array.prototype.slice.call(newMain.children).forEach(function (child) {
+        if (!child.classList.contains('topbar')) mainEl.appendChild(document.adoptNode(child));
+      });
+      // Menu lateral (estado ativo, organização) e avisos da nova página.
+      var newNav = doc.querySelector('.sidebar .nav');
+      var nav = document.querySelector('.sidebar .nav');
+      if (newNav && nav) nav.innerHTML = newNav.innerHTML;
+      var oldToasts = document.querySelector('.toasts');
+      if (oldToasts) oldToasts.remove();
+      var newToasts = doc.querySelector('.toasts');
+      if (newToasts) document.body.appendChild(document.adoptNode(newToasts));
+      document.title = doc.title;
+
+      var target = finalUrl.href + (finalUrl.hash ? '' : (new URL(href, window.location.href).hash || ''));
+      if (options.push !== false) history.pushState({ az: true }, '', target);
+      else if (target !== window.location.href) history.replaceState({ az: true }, '', target);
+
+      var hash = new URL(target).hash;
+      var anchor = hash && document.getElementById(decodeURIComponent(hash.slice(1)));
+      if (anchor) anchor.scrollIntoView();
+      else if (options.push !== false) window.scrollTo(0, 0);
+
+      initPage(document);
+      runPageScripts(doc);
+      var focusTarget = document.getElementById('conteudo');
+      if (focusTarget) {
+        focusTarget.setAttribute('tabindex', '-1');
+        focusTarget.focus({ preventScroll: true });
+      }
+      finishBar();
+    }).catch(function () {
+      if (token === navToken) hardNavigate(href);
+    });
+  }
+
+  // Executa os scripts específicos da página nova (ex.: chat).
+  function runPageScripts(doc) {
+    doc.querySelectorAll('body script[src]').forEach(function (old) {
+      var src = old.getAttribute('src');
+      if (!src || src.indexOf('/js/main.js') !== -1) return;
+      var s = document.createElement('script');
+      s.src = src;
+      s.async = false;
+      document.body.appendChild(s);
+      s.addEventListener('load', function () { s.remove(); });
+    });
+  }
+
+  if (swapEnabled) {
+    history.replaceState({ az: true }, '', window.location.href);
+    window.addEventListener('popstate', function (e) {
+      if (!e.state || !e.state.az) return;
+      swapTo(window.location.href, { push: false });
+    });
+    // Pré-carrega ao passar o mouse (intenção) nos itens de menu e abas.
+    var hoverTimer = null;
+    document.addEventListener('mouseover', function (e) {
+      var a = e.target.closest('.nav a[href], .tabs a[href]');
+      if (!a) return;
+      var url = eligibleLink(a);
+      if (!url || !isPanelUrl(url) || url.href.split('#')[0] === window.location.href.split('#')[0]) return;
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(function () { prefetch(url.href); }, 90);
+    });
+    document.addEventListener('mouseout', function (e) {
+      if (e.target.closest('.nav a[href], .tabs a[href]')) clearTimeout(hoverTimer);
+    });
   }
 
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     var a = e.target.closest('a[href]');
-    if (!a || a.hasAttribute('download') || (a.target && a.target !== '_self')) return;
-    var url;
-    try { url = new URL(a.href, window.location.href); } catch (err) { return; }
-    if (url.origin !== window.location.origin) return;
+    var url = eligibleLink(a);
+    if (!url) return;
     if (url.pathname === window.location.pathname && url.search === window.location.search) return; // âncora na mesma página
-    var navItem = a.closest('.nav');
-    if (navItem) {
-      navItem.querySelectorAll('a.active').forEach(function (x) { x.classList.remove('active'); x.removeAttribute('aria-current'); });
-      a.classList.add('active');
-      a.setAttribute('aria-current', 'page');
-    }
-    var tabs = a.closest('.tabs');
-    if (tabs) {
-      tabs.querySelectorAll('a.active').forEach(function (x) { x.classList.remove('active'); });
-      a.classList.add('active');
+    markActive(a);
+    if (swapEnabled && isPanelUrl(url)) {
+      e.preventDefault();
+      swapTo(url.href);
+      return;
     }
     startNav();
   });
-  window.addEventListener('pageshow', function (e) { if (e.persisted) resetNav(); });
 
-  // Diálogos: [data-open="id"] abre; [data-close] fecha; clique no fundo fecha.
-  // O fechamento espera a animação de saída terminar.
+  // ------------------------------------------------------------- diálogos
+  // [data-open="id"] abre; [data-close] fecha; clique no fundo fecha.
   function closeDialog(d) {
     if (!d || !d.open || d.classList.contains('is-closing')) return;
     d.classList.add('is-closing');
-    setTimeout(function () { d.classList.remove('is-closing'); d.close(); }, 150);
+    setTimeout(function () { d.classList.remove('is-closing'); d.close(); }, reduceMotion ? 0 : 150);
   }
   AZ.closeDialog = closeDialog;
   document.addEventListener('click', function (e) {
@@ -153,17 +303,16 @@
     }
   });
 
-  // Confirmação de ações destrutivas.
-  document.querySelectorAll('form[data-confirm]').forEach(function (form) {
-    form.addEventListener('submit', function (e) {
-      if (!window.confirm(form.getAttribute('data-confirm'))) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-      }
-    });
-  });
-
-  // Estado de carregamento nos envios de formulário (evita clique duplo).
+  // -------------------------------------------------------- formulários
+  // Confirmação de ações destrutivas (captura: roda antes do estado de envio).
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('form[data-confirm]');
+    if (form && !window.confirm(form.getAttribute('data-confirm'))) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
+  // Estado de carregamento nos envios (evita clique duplo).
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (e.defaultPrevented || form.hasAttribute('data-no-loading')) return;
@@ -173,16 +322,23 @@
     }
     if ((form.getAttribute('method') || '').toLowerCase() !== 'dialog') startNav();
   });
-  window.addEventListener('pageshow', function () {
-    document.querySelectorAll('.is-loading').forEach(function (b) { b.disabled = false; b.classList.remove('is-loading'); });
+  document.addEventListener('change', function (e) {
+    var sel = e.target;
+    if (sel.matches && sel.matches('select[data-autosubmit]')) { startNav(); sel.form.submit(); return; }
+    if (sel.matches && sel.matches('select[data-toggle-kind]')) { applyKind(sel); return; }
+    if (sel.matches && sel.matches('select[data-template-select]')) {
+      var opt = sel.options[sel.selectedIndex];
+      var lang = sel.form.querySelector('[name="template_language"]');
+      if (opt && lang && opt.getAttribute('data-language')) lang.value = opt.getAttribute('data-language');
+    }
   });
+  function applyKind(sel) {
+    sel.form.querySelectorAll('[data-kind]').forEach(function (block) {
+      block.hidden = block.getAttribute('data-kind') !== sel.value;
+    });
+  }
 
-  // Selects que enviam o formulário ao mudar.
-  document.querySelectorAll('select[data-autosubmit]').forEach(function (sel) {
-    sel.addEventListener('change', function () { startNav(); sel.form.submit(); });
-  });
-
-  // Copiar para a área de transferência.
+  // ------------------------------------------------------------- copiar
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-copy]');
     if (!btn) return;
@@ -209,7 +365,7 @@
     ta.remove();
   }
 
-  // Menu lateral no celular.
+  // -------------------------------------------------- menu lateral (celular)
   var toggle = document.getElementById('menuToggle');
   var sidebar = document.getElementById('sidebar');
   var scrim = document.getElementById('scrim');
@@ -224,31 +380,22 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
 
   // Botão "voltar".
-  document.querySelectorAll('[data-history-back]').forEach(function (b) {
-    b.addEventListener('click', function () { history.back(); });
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-history-back]')) history.back();
   });
 
-  // Alternância texto/modelo no envio de teste.
-  document.querySelectorAll('select[data-toggle-kind]').forEach(function (sel) {
-    var form = sel.form;
-    function apply() {
-      form.querySelectorAll('[data-kind]').forEach(function (block) {
-        block.hidden = block.getAttribute('data-kind') !== sel.value;
-      });
-    }
-    sel.addEventListener('change', apply);
-    apply();
-  });
-  document.querySelectorAll('select[data-template-select]').forEach(function (sel) {
-    sel.addEventListener('change', function () {
-      var opt = sel.options[sel.selectedIndex];
-      var lang = sel.form.querySelector('[name="template_language"]');
-      if (opt && lang && opt.getAttribute('data-language')) lang.value = opt.getAttribute('data-language');
-    });
-  });
+  // ------------------------------------------------------------------
+  // Inicialização por página (roda no carregamento e após cada troca).
+  // ------------------------------------------------------------------
+  function initPage(root) {
+    root.querySelectorAll('.toast:not([data-init])').forEach(function (t) { t.setAttribute('data-init', '1'); autoDismiss(t); });
+    root.querySelectorAll('select[data-toggle-kind]').forEach(applyKind);
+    root.querySelectorAll('[data-chart]:not([data-init])').forEach(initChart);
+  }
 
   // Tooltip do gráfico de barras (hover e foco por teclado).
-  document.querySelectorAll('[data-chart]').forEach(function (chart) {
+  function initChart(chart) {
+    chart.setAttribute('data-init', '1');
     var area = chart.querySelector('.chart-area');
     var tip = document.createElement('div');
     tip.className = 'chart-tip';
@@ -284,5 +431,7 @@
       col.addEventListener('mouseleave', function () { tip.hidden = true; });
       col.addEventListener('blur', function () { tip.hidden = true; });
     });
-  });
+  }
+
+  initPage(document);
 })();
