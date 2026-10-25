@@ -59,6 +59,9 @@ def _configure_logging(app: Flask) -> None:
     level = getattr(logging, app.config["LOG_LEVEL"], logging.INFO)
     logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     app.logger.setLevel(level)
+    # As URLs do Supabase trazem wamid (contém o telefone do contato) e key_hash: não logar.
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(max(level, logging.WARNING))
 
 
 def _validate_startup(app: Flask, cfg: Config) -> None:
