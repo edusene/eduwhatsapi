@@ -3,7 +3,7 @@
 
    1. Carrega https://connect.facebook.net/en_US/sdk.js e chama FB.init.
    2. FB.login({config_id, response_type: 'code', override_default_response_type: true,
-      extras: {setup: {}, [featureType]}}) abre o fluxo da Meta.
+      extras: {setup: {}, version, sessionInfoVersion, [featureType]}}) abre o fluxo da Meta.
    3. A Meta envia window.postMessage {type: 'WA_EMBEDDED_SIGNUP', event: 'FINISH'...,
       data: {phone_number_id, waba_id, business_id}} (só aceitamos origem *.facebook.com).
    4. O callback do FB.login traz authResponse.code (válido por ~30s), que enviamos
@@ -109,7 +109,7 @@
     startBtn.disabled = true;
     startBtn.classList.add('is-loading');
     showStatus('Conclua as etapas na janela da Meta…');
-    var extras = { setup: {} };
+    var extras = { setup: {}, version: 'v4', sessionInfoVersion: '3' };
     if (mode === 'coexistence') extras.featureType = 'whatsapp_business_app_onboarding';
     FB.login(function (response) {
       if (response && response.authResponse && response.authResponse.code) {
