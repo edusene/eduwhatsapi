@@ -374,7 +374,7 @@ def list_conversations(org_id: str, *, status: str | None = None, assigned_to: s
         query = query.eq("status", status)
     if assigned_to:
         query = query.eq("assigned_to", assigned_to)
-    rows = query.order("last_message_at", desc=True).limit(max(1, min(limit, 200))).execute().data
+    rows = query.order("last_message_at", desc=True).limit(max(1, min(limit, 1000))).execute().data
     if not rows:
         return []
     contacts = {
@@ -417,7 +417,7 @@ def get_conversation(org_id: str, conversation_id: str) -> dict[str, Any] | None
 
 
 def conversation_messages(org_id: str, conversation_id: str, *, after: str | None = None,
-                          limit: int = 100) -> list[dict[str, Any]]:
+                          before: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     query = (
         get_service_client().table("messages").select(MESSAGE_PUBLIC_FIELDS)
         .eq("organization_id", org_id).eq("conversation_id", conversation_id)
@@ -426,6 +426,8 @@ def conversation_messages(org_id: str, conversation_id: str, *, after: str | Non
         query = query.gt("updated_at", after)
         rows = query.order("updated_at").limit(limit).execute().data
         return [public_message(r) for r in rows]
+    if before:
+        query = query.lt("created_at", before)
     rows = query.order("created_at", desc=True).limit(limit).execute().data
     return [public_message(r) for r in reversed(rows)]
 

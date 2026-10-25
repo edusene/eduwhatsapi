@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 
 from flask import Response, abort, jsonify, render_template, request, stream_with_context
 
@@ -23,6 +24,7 @@ from app.services.supabase_client import get_service_client
 logger = logging.getLogger(__name__)
 
 _UUID_RE = re.compile(r"[0-9a-fA-F-]{32,36}")
+CONVERSATIONS_PAGE = 100
 
 
 def _json_error(message: str, status: int = 400, code: str = "error"):
@@ -89,9 +91,11 @@ def inbox():
 def inbox_conversations():
     mine = request.args.get("mine") == "1"
     connection_id = request.args.get("connection_id", "")
+    limit = request.args.get("limit", "")
     rows = messaging.list_conversations(
         current_org_id(), status=request.args.get("status") or None,
-        assigned_to=current_user_id() if mine else None, search=request.args.get("q"), limit=100,
+        assigned_to=current_user_id() if mine else None, search=request.args.get("q"),
+        limit=min(int(limit), 1000) if limit.isdigit() and int(limit) > 0 else CONVERSATIONS_PAGE,
         connection_id=connection_id if _UUID_RE.fullmatch(connection_id) else None)
     return jsonify({"ok": True, "conversations": rows})
 
@@ -102,7 +106,13 @@ def inbox_conversations():
 def inbox_messages(conversation_id: str):
     conversation = _conversation_or_404(conversation_id)
     after = request.args.get("after") or None
-    rows = messaging.conversation_messages(current_org_id(), conversation_id, after=after)
+    before = request.args.get("before") or None
+    if before:
+        try:
+            datetime.fromisoformat(before.replace("Z", "+00:00"))
+        except ValueError:
+            return jsonify({"ok": False, "error": "before inválido."}), 400
+    rows = messaging.conversation_messages(current_org_id(), conversation_id, after=after, before=before)
     return jsonify({"ok": True, "messages": rows, "window_open": messaging.window_open(conversation),
                     "status": conversation.get("status"), "assigned_to": conversation.get("assigned_to")})
 

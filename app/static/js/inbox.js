@@ -28,6 +28,7 @@
     resolve: document.getElementById('resolveBtn')
   };
 
+  var PAGE = 100; // igual ao tamanho de página do servidor
   var state = {
     filter: 'open',
     query: '',
@@ -39,7 +40,9 @@
     windowOpen: false,
     sending: false,
     seen: {},           // ids já desenhados (só mensagens novas animam)
-    seenReady: false
+    seenReady: false,
+    convLimit: PAGE,    // a lista cresce de PAGE em PAGE ("Carregar mais")
+    hasOlder: false     // a conversa tem mensagens antes das já carregadas
   };
 
   // ------------------------------------------------------------------ util
@@ -111,6 +114,7 @@
     if (state.query) params.set('q', state.query);
     var channel = document.getElementById('convChannel');
     if (channel && channel.value) params.set('connection_id', channel.value);
+    params.set('limit', String(state.convLimit));
     return AZ.json(API + '/conversations?' + params.toString())
       .then(function (data) {
         state.conversations = data.conversations || [];
@@ -150,6 +154,12 @@
       btn.addEventListener('click', function () { openConversation(c.id); });
       els.list.appendChild(btn);
     });
+    if (state.conversations.length >= state.convLimit) {
+      var more = el('button', 'btn btn-sm btn-block', 'Carregar mais');
+      more.type = 'button';
+      more.addEventListener('click', function () { state.convLimit += PAGE; loadConversations(); });
+      els.list.appendChild(more);
+    }
   }
 
   // ------------------------------------------------------------- conversa
@@ -158,6 +168,7 @@
     state.active = state.conversations.find(function (c) { return c.id === id; }) || null;
     state.messages = {};
     state.seen = {};
+    state.hasOlder = false;
     state.seenReady = false;
     state.lastUpdated = null;
     els.messages.innerHTML = '';
@@ -195,9 +206,11 @@
     var id = state.activeId;
     if (!id) return Promise.resolve();
     var url = API + '/conversations/' + id + '/messages';
+    var firstLoad = !state.lastUpdated;
     if (state.lastUpdated) url += '?after=' + encodeURIComponent(state.lastUpdated);
     return AZ.json(url).then(function (data) {
       if (id !== state.activeId) return;
+      if (firstLoad) state.hasOlder = (data.messages || []).length >= PAGE;
       var nearBottom = els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight < 120;
       var changed = false;
       (data.messages || []).forEach(function (m) {
@@ -290,10 +303,33 @@
     bubble.appendChild(el('span', 'tag', 'Mensagem do tipo “' + type + '” (veja no WhatsApp)'));
   }
 
+  function loadOlder() {
+    var id = state.activeId;
+    var oldest = Object.keys(state.messages).map(function (k) { return state.messages[k].created_at; }).sort()[0];
+    if (!id || !oldest) return;
+    AZ.json(API + '/conversations/' + id + '/messages?before=' + encodeURIComponent(oldest)).then(function (data) {
+      if (id !== state.activeId) return;
+      var older = data.messages || [];
+      older.forEach(function (m) { state.messages[m.id] = m; state.seen[m.id] = true; });
+      state.hasOlder = older.length >= PAGE;
+      // Mantém na tela a mensagem que o usuário estava vendo.
+      var fromBottom = els.messages.scrollHeight - els.messages.scrollTop;
+      renderMessages();
+      els.messages.scrollTop = els.messages.scrollHeight - fromBottom;
+    }).catch(function () { AZ.toast('Não foi possível carregar mensagens anteriores.', 'error'); });
+  }
+
   function renderMessages() {
     var list = Object.keys(state.messages).map(function (k) { return state.messages[k]; });
     list.sort(function (a, b) { return (a.created_at || '') < (b.created_at || '') ? -1 : 1; });
     els.messages.innerHTML = '';
+    if (state.hasOlder) {
+      var older = el('button', 'btn btn-sm', 'Carregar anteriores');
+      older.type = 'button';
+      older.style.alignSelf = 'center';
+      older.addEventListener('click', loadOlder);
+      els.messages.appendChild(older);
+    }
     if (!list.length) {
       els.messages.appendChild(el('div', 'day-sep', 'Nenhuma mensagem nesta conversa ainda.'));
       return;
@@ -510,9 +546,9 @@
     });
   }
   var channelSelect = document.getElementById('convChannel');
-  if (channelSelect) channelSelect.addEventListener('change', loadConversations);
+  if (channelSelect) channelSelect.addEventListener('change', function () { state.convLimit = PAGE; loadConversations(); });
   document.querySelectorAll('[data-filter]').forEach(function (b) {
-    b.addEventListener('click', function () { state.filter = b.getAttribute('data-filter'); setFilterButtons(); loadConversations(); });
+    b.addEventListener('click', function () { state.filter = b.getAttribute('data-filter'); state.convLimit = PAGE; setFilterButtons(); loadConversations(); });
   });
   var searchTimer = null;
   if (els.search) els.search.addEventListener('input', function () {

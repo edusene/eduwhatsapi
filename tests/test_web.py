@@ -152,6 +152,23 @@ class TestDashboardPages:
         everything = owner.get("/dashboard/inbox/api/conversations?status=open&connection_id=lixo").get_json()
         assert len(everything["conversations"]) == 2
 
+    def test_inbox_load_more_and_older_messages(self, owner, fake_db):
+        for i in range(3):
+            contact = fake_db.insert_row("contacts", {"organization_id": TEST_ORG_ID, "wa_id": f"55119000000{i}"})
+            conv = fake_db.insert_row("conversations", {
+                "organization_id": TEST_ORG_ID, "connection_id": CONN_A_ID, "contact_id": contact["id"],
+                "status": "open", "last_message_at": f"2026-10-0{i + 1}T12:00:00+00:00"})
+        assert len(owner.get("/dashboard/inbox/api/conversations?status=open&limit=2").get_json()["conversations"]) == 2
+        assert len(owner.get("/dashboard/inbox/api/conversations?status=open&limit=x").get_json()["conversations"]) == 3
+        for i in range(5):
+            fake_db.insert_row("messages", {"organization_id": TEST_ORG_ID, "conversation_id": conv["id"],
+                                            "connection_id": CONN_A_ID, "direction": "inbound", "type": "text",
+                                            "created_at": f"2026-10-03T12:0{i}:00+00:00"})
+        url = f"/dashboard/inbox/api/conversations/{conv['id']}/messages"
+        older = owner.get(url + "?before=2026-10-03T12:03:00%2B00:00").get_json()["messages"]
+        assert [m["created_at"][14:16] for m in older] == ["00", "01", "02"]
+        assert owner.get(url + "?before=ontem").status_code == 400
+
     def test_channels_page_allows_facebook_sdk_only_there(self, owner):
         r = owner.get("/dashboard/channels")
         assert "connect.facebook.net" in r.headers["Content-Security-Policy"]
