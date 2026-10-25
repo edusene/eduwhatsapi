@@ -149,8 +149,8 @@ paths:
   /whatsapp/{phone_number_id}/messages/read:
     post:
       tags: [Mensagens]
-      summary: Marca uma mensagem recebida como lida
-      description: "Escopo: messages:send"
+      summary: Marca uma mensagem recebida como lida (e, opcionalmente, mostra "digitando…")
+      description: "Escopo: messages:send. Com typing=true o contato vê \"digitando…\" até a próxima resposta ou por até 25 s."
       operationId: markRead
       parameters: [{ $ref: "#/components/parameters/PhoneNumberId" }]
       requestBody:
@@ -160,7 +160,9 @@ paths:
             schema:
               type: object
               required: [message_id]
-              properties: { message_id: { type: string, example: "wamid.HBgM..." } }
+              properties:
+                message_id: { type: string, example: "wamid.HBgM..." }
+                typing: { type: boolean, default: false }
       responses:
         "200": { description: OK }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -217,7 +219,80 @@ paths:
         - { $ref: "#/components/parameters/PhoneNumberId" }
         - { name: status, in: query, schema: { type: string, example: APPROVED } }
       responses:
-        "200": { description: Lista no formato da Meta (name, status, language, category, components) }
+        "200": { description: Lista no formato da Meta (name, status, language, category, components, rejected_reason) }
+        "502": { $ref: "#/components/responses/MetaError" }
+    post:
+      tags: [Modelos e mídia]
+      summary: Cria um modelo de mensagem (vai para análise da Meta)
+      description: "Escopo: templates:write. Corpo no formato da Graph API."
+      operationId: createTemplate
+      parameters: [{ $ref: "#/components/parameters/PhoneNumberId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, language, category, components]
+              properties:
+                name: { type: string, pattern: "^[a-z0-9_]{1,512}$", example: lembrete_consulta }
+                language: { type: string, example: pt_BR }
+                category: { type: string, enum: [MARKETING, UTILITY, AUTHENTICATION] }
+                components: { type: array, items: { type: object } }
+                parameter_format: { type: string, enum: [POSITIONAL, NAMED] }
+                allow_category_change: { type: boolean }
+      responses:
+        "201": { description: "{data: {id, status, category}}" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/MetaError" }
+
+  /whatsapp/{phone_number_id}/templates/{name}:
+    delete:
+      tags: [Modelos e mídia]
+      summary: Apaga um modelo (todas as línguas, ou só uma com hsm_id)
+      description: "Escopo: templates:write"
+      operationId: deleteTemplate
+      parameters:
+        - { $ref: "#/components/parameters/PhoneNumberId" }
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: hsm_id, in: query, schema: { type: string } }
+      responses:
+        "200": { description: "{data: {success: true}}" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/MetaError" }
+
+  /whatsapp/{phone_number_id}/business_profile:
+    get:
+      tags: [Modelos e mídia]
+      summary: Lê o perfil comercial do número
+      description: "Escopo: channels:read. Resposta no formato da Meta: {data: [{about, address, description, email, profile_picture_url, websites, vertical}]}"
+      operationId: getBusinessProfile
+      parameters: [{ $ref: "#/components/parameters/PhoneNumberId" }]
+      responses:
+        "200": { description: Perfil no formato da Meta }
+        "502": { $ref: "#/components/responses/MetaError" }
+    post:
+      tags: [Modelos e mídia]
+      summary: Atualiza o perfil comercial do número
+      description: "Escopo: profile:write. Envie só os campos que quer alterar."
+      operationId: updateBusinessProfile
+      parameters: [{ $ref: "#/components/parameters/PhoneNumberId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                about: { type: string, maxLength: 139 }
+                address: { type: string, maxLength: 256 }
+                description: { type: string, maxLength: 512 }
+                email: { type: string, maxLength: 128 }
+                websites: { type: array, maxItems: 2, items: { type: string, format: uri } }
+                vertical: { type: string, example: HEALTH }
+      responses:
+        "200": { description: "{data: {success: true}}" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/MetaError" }
 
   /whatsapp/{phone_number_id}/media:

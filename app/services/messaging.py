@@ -189,11 +189,12 @@ def send(org_id: str, connection: dict[str, Any], payload: dict[str, Any], *, so
     return out
 
 
-def mark_as_read(connection: dict[str, Any], wamid: str, test_mode: bool = False) -> dict[str, Any]:
+def mark_as_read(connection: dict[str, Any], wamid: str, test_mode: bool = False,
+                 typing: bool = False) -> dict[str, Any]:
     if test_mode:
         return {"success": True, "test_mode": True}
     token = connections.token_for(connection)
-    return get_adapter("whatsapp").mark_as_read(connection["phone_number_id"], token, wamid)
+    return get_adapter("whatsapp").mark_as_read(connection["phone_number_id"], token, wamid, typing=typing)
 
 
 def public_message(row: dict[str, Any]) -> dict[str, Any]:

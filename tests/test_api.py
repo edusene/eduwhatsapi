@@ -233,6 +233,68 @@ class TestOtherEndpoints:
         assert json.loads(responses.calls[0].request.body)["status"] == "read"
 
     @responses.activate
+    def test_mark_read_with_typing(self, client, make_key):
+        responses.add(responses.POST, META_SEND, json={"success": True})
+        r = client.post(f"/api/v1/whatsapp/{PHONE_A}/messages/read",
+                        json={"message_id": "wamid.X", "typing": True}, headers=auth(make_key()))
+        assert r.status_code == 200
+        assert json.loads(responses.calls[0].request.body)["typing_indicator"] == {"type": "text"}
+
+    @responses.activate
+    def test_template_create(self, client, make_key):
+        responses.add(responses.POST, f"{GRAPH}/{WABA_A}/message_templates",
+                      json={"id": "555", "status": "PENDING", "category": "UTILITY"})
+        body = {"name": "lembrete_consulta", "language": "pt_BR", "category": "utility",
+                "components": [{"type": "BODY", "text": "Olá {{1}}"}], "extra": "ignorado"}
+        r = client.post(f"/api/v1/whatsapp/{PHONE_A}/templates", json=body, headers=auth(make_key()))
+        assert r.status_code == 201
+        assert r.get_json()["data"] == {"id": "555", "status": "PENDING", "category": "UTILITY"}
+        sent = json.loads(responses.calls[0].request.body)
+        assert sent["category"] == "UTILITY" and "extra" not in sent
+
+    def test_template_create_rejects_bad_name(self, client, make_key):
+        r = client.post(f"/api/v1/whatsapp/{PHONE_A}/templates", headers=auth(make_key()),
+                        json={"name": "Nome Ruim", "language": "pt_BR", "category": "UTILITY",
+                              "components": [{"type": "BODY", "text": "x"}]})
+        assert r.status_code == 400
+
+    def test_template_write_requires_scope(self, client, make_key):
+        r = client.delete(f"/api/v1/whatsapp/{PHONE_A}/templates/promo",
+                          headers=auth(make_key(scopes=["templates:read"])))
+        assert r.status_code == 403
+
+    @responses.activate
+    def test_template_delete(self, client, make_key):
+        responses.add(responses.DELETE, f"{GRAPH}/{WABA_A}/message_templates", json={"success": True})
+        r = client.delete(f"/api/v1/whatsapp/{PHONE_A}/templates/promo", headers=auth(make_key()))
+        assert r.status_code == 200
+        assert r.get_json()["data"] == {"success": True}
+        assert "name=promo" in responses.calls[0].request.url
+
+    @responses.activate
+    def test_business_profile_get_passthrough(self, client, make_key):
+        graph = {"data": [{"about": "Consultório", "vertical": "HEALTH", "messaging_product": "whatsapp"}]}
+        responses.add(responses.GET, f"{GRAPH}/{PHONE_A}/whatsapp_business_profile", json=graph)
+        r = client.get(f"/api/v1/whatsapp/{PHONE_A}/business_profile", headers=auth(make_key()))
+        assert r.status_code == 200
+        assert r.get_json() == graph
+
+    @responses.activate
+    def test_business_profile_update(self, client, make_key):
+        responses.add(responses.POST, f"{GRAPH}/{PHONE_A}/whatsapp_business_profile", json={"success": True})
+        r = client.post(f"/api/v1/whatsapp/{PHONE_A}/business_profile", headers=auth(make_key()),
+                        json={"about": "Atendimento", "websites": ["https://exemplo.com"], "token": "x"})
+        assert r.status_code == 200
+        sent = json.loads(responses.calls[0].request.body)
+        assert sent == {"messaging_product": "whatsapp", "about": "Atendimento",
+                        "websites": ["https://exemplo.com"]}
+
+    def test_business_profile_update_validates(self, client, make_key):
+        r = client.post(f"/api/v1/whatsapp/{PHONE_A}/business_profile", headers=auth(make_key()),
+                        json={"websites": ["javascript:alert(1)"]})
+        assert r.status_code == 400
+
+    @responses.activate
     def test_media_download_rejects_untrusted_host(self, client, make_key):
         responses.add(responses.GET, f"{GRAPH}/123456789", json={"url": "https://evil.example.com/x", "mime_type": "image/jpeg"})
         r = client.get(f"/api/v1/whatsapp/{PHONE_A}/media/123456789", headers=auth(make_key()))

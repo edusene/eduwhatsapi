@@ -21,6 +21,8 @@ SCOPES = {
     "messages:read": "Consultar mensagens e status de entrega",
     "channels:read": "Listar números conectados",
     "templates:read": "Listar modelos de mensagem",
+    "templates:write": "Criar e apagar modelos de mensagem",
+    "profile:write": "Editar o perfil comercial do número",
     "media:read": "Baixar mídias recebidas",
     "media:write": "Enviar arquivos de mídia",
     "conversations:read": "Ler conversas do chat (plano API + Chat)",

@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 _PHONE_NUMBER_ID_RE = re.compile(r"\d{5,25}")
 _MEDIA_ID_RE = re.compile(r"\d{5,30}")
 _UUID_RE = re.compile(r"[0-9a-fA-F-]{32,36}")
+_TEMPLATE_NAME_RE = re.compile(r"[a-z0-9_]{1,512}")
+_TEMPLATE_CATEGORIES = {"MARKETING", "UTILITY", "AUTHENTICATION"}
+# Campos editáveis do perfil comercial e tamanho máximo aceito pela Meta.
+_PROFILE_LIMITS = {"about": 139, "address": 256, "description": 512, "email": 128, "vertical": 64}
 _ALLOWED_UPLOAD_TYPES = {
     "image/jpeg", "image/png", "image/webp", "video/mp4", "video/3gpp", "audio/aac", "audio/mp4",
     "audio/mpeg", "audio/amr", "audio/ogg", "application/pdf", "text/plain",
@@ -139,7 +143,10 @@ def mark_read(phone_number_id: str):
     wamid = data.get("message_id")
     if not isinstance(wamid, str) or not wamid.startswith("wamid.") or len(wamid) > 256:
         raise schemas.ValidationError("Informe message_id (wamid.*) da mensagem recebida.", "invalid_field", "message_id")
-    result = messaging.mark_as_read(connection, wamid, test_mode=g.test_mode)
+    typing = data.get("typing", False)
+    if not isinstance(typing, bool):
+        raise schemas.ValidationError("typing deve ser true ou false.", "invalid_field", "typing")
+    result = messaging.mark_as_read(connection, wamid, test_mode=g.test_mode, typing=typing)
     return jsonify({"data": result, "request_id": g.request_id})
 
 
@@ -190,6 +197,104 @@ def templates_list(phone_number_id: str):
     if status:
         templates = [t for t in templates if t.get("status") == status.upper()]
     return jsonify({"data": templates})
+
+
+@bp.post("/whatsapp/<phone_number_id>/templates")
+@require_api_key("templates:write")
+def templates_create(phone_number_id: str):
+    connection, error = _connection_or_error(phone_number_id)
+    if error:
+        return error
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return error_response("invalid_json", "Envie um corpo JSON válido (Content-Type: application/json).", 400)
+    name, language, category = data.get("name"), data.get("language"), data.get("category")
+    if not isinstance(name, str) or not _TEMPLATE_NAME_RE.fullmatch(name):
+        raise schemas.ValidationError("name deve ter só letras minúsculas, números e _.", "invalid_field", "name")
+    if not isinstance(language, str) or not 2 <= len(language) <= 10:
+        raise schemas.ValidationError("Informe language (ex.: pt_BR).", "invalid_field", "language")
+    if not isinstance(category, str) or category.upper() not in _TEMPLATE_CATEGORIES:
+        raise schemas.ValidationError("category deve ser MARKETING, UTILITY ou AUTHENTICATION.",
+                                      "invalid_field", "category")
+    if not isinstance(data.get("components"), list) or not data["components"]:
+        raise schemas.ValidationError("Informe components (lista).", "invalid_field", "components")
+    template = {k: data[k] for k in ("name", "language", "category", "components",
+                                     "parameter_format", "allow_category_change") if k in data}
+    template["category"] = category.upper()
+    if g.test_mode:
+        return jsonify({"data": {"id": "0" * 15, "status": "PENDING", "category": template["category"]},
+                        "test_mode": True}), 201
+    result = get_adapter("whatsapp").create_template(
+        connection["waba_id"], connections.token_for(connection), template)
+    body = {k: result.get(k) for k in ("id", "status", "category")}
+    return jsonify({"data": body, "test_mode": False}), 201
+
+
+@bp.delete("/whatsapp/<phone_number_id>/templates/<name>")
+@require_api_key("templates:write")
+def templates_delete(phone_number_id: str, name: str):
+    connection, error = _connection_or_error(phone_number_id)
+    if error:
+        return error
+    if not _TEMPLATE_NAME_RE.fullmatch(name):
+        return error_response("validation_error", "Nome de modelo inválido.", 400)
+    hsm_id = request.args.get("hsm_id")
+    if hsm_id and not _MEDIA_ID_RE.fullmatch(hsm_id):
+        return error_response("validation_error", "hsm_id inválido.", 400)
+    if g.test_mode:
+        return jsonify({"data": {"success": True}, "test_mode": True})
+    result = get_adapter("whatsapp").delete_template(
+        connection["waba_id"], connections.token_for(connection), name, hsm_id)
+    return jsonify({"data": {"success": bool(result.get("success"))}, "test_mode": False})
+
+
+# ---------------------------------------------------------------------------
+# Perfil comercial
+# ---------------------------------------------------------------------------
+@bp.get("/whatsapp/<phone_number_id>/business_profile")
+@require_api_key("channels:read")
+def business_profile_get(phone_number_id: str):
+    connection, error = _connection_or_error(phone_number_id)
+    if error:
+        return error
+    # Repassa a resposta da Graph sem alterar: {"data": [{...}]}.
+    return jsonify(get_adapter("whatsapp").get_business_profile(
+        connection["phone_number_id"], connections.token_for(connection)))
+
+
+@bp.post("/whatsapp/<phone_number_id>/business_profile")
+@require_api_key("profile:write")
+def business_profile_update(phone_number_id: str):
+    connection, error = _connection_or_error(phone_number_id)
+    if error:
+        return error
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return error_response("invalid_json", "Envie um corpo JSON válido (Content-Type: application/json).", 400)
+    profile: dict = {}
+    for field, limit in _PROFILE_LIMITS.items():
+        if field in data:
+            value = data[field]
+            if not isinstance(value, str) or len(value) > limit:
+                raise schemas.ValidationError(f"{field} deve ser texto de até {limit} caracteres.",
+                                              "invalid_field", field)
+            profile[field] = value
+    if "websites" in data:
+        sites = data["websites"]
+        if (not isinstance(sites, list) or len(sites) > 2
+                or not all(isinstance(u, str) and u.startswith(("http://", "https://")) and len(u) <= 256
+                           for u in sites)):
+            raise schemas.ValidationError("websites deve ser uma lista de até 2 URLs http(s).",
+                                          "invalid_field", "websites")
+        profile["websites"] = sites
+    if not profile:
+        raise schemas.ValidationError("Envie ao menos um campo: about, address, description, email, "
+                                      "websites ou vertical.", "missing_field")
+    if g.test_mode:
+        return jsonify({"data": {"success": True}, "test_mode": True})
+    result = get_adapter("whatsapp").update_business_profile(
+        connection["phone_number_id"], connections.token_for(connection), profile)
+    return jsonify({"data": {"success": bool(result.get("success"))}, "test_mode": False})
 
 
 @bp.post("/whatsapp/<phone_number_id>/media")

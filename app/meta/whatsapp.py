@@ -9,6 +9,8 @@ Endpoints usados (documentação oficial da Cloud API / Embedded Signup):
 - GET  /{waba-id}/phone_numbers                números da WABA
 - GET  /{waba-id}/message_templates            modelos de mensagem
 - POST /{waba-id}/message_templates            criar modelo
+- DELETE /{waba-id}/message_templates          apagar modelo (por nome)
+- GET/POST /{phone-number-id}/whatsapp_business_profile  perfil comercial
 - POST/DELETE /{waba-id}/subscribed_apps       inscrever o app nos webhooks da WABA
 - POST /{phone-number-id}/smb_app_data         sincronização (coexistência)
 """
@@ -20,6 +22,7 @@ from app.meta.graph_api import MetaGraphClient
 
 PHONE_FIELDS = "display_phone_number,verified_name,quality_rating,name_status,code_verification_status,platform_type,throughput"
 TEMPLATE_FIELDS = "id,name,status,language,category,components,rejected_reason"
+PROFILE_FIELDS = "about,address,description,email,profile_picture_url,websites,vertical"
 
 
 class WhatsAppAdapter:
@@ -63,10 +66,13 @@ class WhatsAppAdapter:
             "to": to, "type": "text", "text": {"preview_url": False, "body": body},
         })
 
-    def mark_as_read(self, phone_number_id: str, token: str, message_id: str) -> dict[str, Any]:
-        return self.client.post(f"/{phone_number_id}/messages", token, json={
-            "messaging_product": "whatsapp", "status": "read", "message_id": message_id,
-        })
+    def mark_as_read(self, phone_number_id: str, token: str, message_id: str,
+                     typing: bool = False) -> dict[str, Any]:
+        body = {"messaging_product": "whatsapp", "status": "read", "message_id": message_id}
+        if typing:
+            # Indicador "digitando…": some na resposta seguinte ou após ~25s.
+            body["typing_indicator"] = {"type": "text"}
+        return self.client.post(f"/{phone_number_id}/messages", token, json=body)
 
     # -- modelos ---------------------------------------------------------------
     def list_templates(self, waba_id: str, token: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -76,6 +82,21 @@ class WhatsAppAdapter:
 
     def create_template(self, waba_id: str, token: str, template: dict[str, Any]) -> dict[str, Any]:
         return self.client.post(f"/{waba_id}/message_templates", token, json=template)
+
+    def delete_template(self, waba_id: str, token: str, name: str,
+                        hsm_id: str | None = None) -> dict[str, Any]:
+        params = {"name": name, **({"hsm_id": hsm_id} if hsm_id else {})}
+        return self.client.delete(f"/{waba_id}/message_templates", token, params=params)
+
+    # -- perfil comercial ------------------------------------------------------
+    def get_business_profile(self, phone_number_id: str, token: str) -> dict[str, Any]:
+        return self.client.get(f"/{phone_number_id}/whatsapp_business_profile", token,
+                               params={"fields": PROFILE_FIELDS})
+
+    def update_business_profile(self, phone_number_id: str, token: str,
+                                profile: dict[str, Any]) -> dict[str, Any]:
+        return self.client.post(f"/{phone_number_id}/whatsapp_business_profile", token,
+                                json={"messaging_product": "whatsapp", **profile})
 
     # -- mídia -----------------------------------------------------------------
     def upload_media(self, phone_number_id: str, token: str, filename: str,
