@@ -7,7 +7,7 @@ from flask import flash, redirect, render_template, request, url_for
 
 from app.dashboard import bp
 from app.extensions import limiter
-from app.services import api_keys, outbound_webhooks
+from app.services import api_keys, connections, outbound_webhooks
 from app.services.encryption import EncryptionNotConfigured
 from app.services.organizations import current_org_id, current_user_id, org_required, require_role
 
@@ -18,7 +18,12 @@ _EXPIRY_OPTIONS = {"": None, "30": 30, "90": 90, "365": 365}
 @org_required
 def api_keys_list():
     return render_template("dashboard/api_keys.html", keys=api_keys.list_api_keys(current_org_id()),
-                           scopes=api_keys.SCOPES, default_scopes=api_keys.DEFAULT_SCOPES)
+                           scopes=api_keys.SCOPES, default_scopes=api_keys.DEFAULT_SCOPES,
+                           channels=_channels())
+
+
+def _channels() -> list[dict]:
+    return connections.list_connections(current_org_id(), include_disconnected=False)
 
 
 @bp.post("/api-keys")
@@ -35,6 +40,7 @@ def api_keys_create():
             scopes=request.form.getlist("scopes") or None,
             created_by=current_user_id(),
             expires_at=expires_at,
+            phone_number_ids=request.form.getlist("phone_number_ids"),
         )
     except ValueError as exc:
         flash(str(exc), "error")
@@ -73,7 +79,7 @@ def webhooks():
     by_id = {e["id"]: e for e in endpoints}
     return render_template("dashboard/webhooks.html", endpoints=endpoints, endpoints_by_id=by_id,
                            deliveries=outbound_webhooks.list_deliveries(org_id),
-                           events=outbound_webhooks.EVENTS)
+                           events=outbound_webhooks.EVENTS, channels=_channels())
 
 
 @bp.post("/webhooks")
@@ -84,7 +90,8 @@ def webhooks_create():
     try:
         record = outbound_webhooks.create_endpoint(
             current_org_id(), url=request.form.get("url", ""), events=request.form.getlist("events"),
-            description=request.form.get("description"), created_by=current_user_id())
+            description=request.form.get("description"), created_by=current_user_id(),
+            phone_number_ids=request.form.getlist("phone_number_ids"))
     except outbound_webhooks.WebhookURLBlocked as exc:
         flash(f"URL recusada: {exc}", "error")
         return redirect(url_for("dashboard.webhooks"))

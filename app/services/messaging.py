@@ -332,12 +332,12 @@ def handle_status(connection: dict[str, Any], status: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 # Consultas
 # ---------------------------------------------------------------------------
-def list_messages(org_id: str, *, phone_number_id: str | None = None, direction: str | None = None,
+def list_messages(org_id: str, *, phone_number_ids: list[str] | None = None, direction: str | None = None,
                   contact: str | None = None, limit: int = 50, before: str | None = None) -> list[dict[str, Any]]:
     query = get_service_client().table("messages").select(MESSAGE_PUBLIC_FIELDS).eq("organization_id", org_id)
-    if phone_number_id:
+    if phone_number_ids:
         conn_ids = [c["id"] for c in connections.list_connections(org_id)
-                    if c.get("phone_number_id") == phone_number_id]
+                    if c.get("phone_number_id") in phone_number_ids]
         if not conn_ids:
             return []
         query = query.in_("connection_id", conn_ids)

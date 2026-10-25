@@ -15,7 +15,7 @@
 
 {% if keys %}
 <div class="card card-flush"><div class="table-wrap"><table class="table">
-  <thead><tr><th>Nome</th><th>Chave</th><th>Ambiente</th><th>Escopos</th><th>Último uso</th><th>Expira</th><th class="right">Ações</th></tr></thead>
+  <thead><tr><th>Nome</th><th>Chave</th><th>Ambiente</th><th>Escopos</th><th>Números</th><th>Último uso</th><th>Expira</th><th class="right">Ações</th></tr></thead>
   <tbody>
   {% for k in keys %}
   <tr class="{% if k.revoked %}is-muted{% endif %}">
@@ -23,6 +23,7 @@
     <td class="mono nowrap">{{ k.key_hint }}</td>
     <td>{% if k.environment == 'live' %}<span class="badge badge-brand">Produção</span>{% else %}<span class="badge badge-warn">Teste</span>{% endif %}</td>
     <td><span class="small" title="{{ k.scopes|join(', ') }}">{{ k.scopes|length }} escopo(s)</span></td>
+    <td><span class="small">{{ k.phone_number_ids|join(', ') if k.phone_number_ids else 'Todos' }}</span></td>
     <td class="nowrap">{{ k.last_used_at|ago if k.last_used_at else 'Nunca' }}</td>
     <td class="nowrap">{{ k.expires_at|dt('%d/%m/%Y') if k.expires_at else 'Não expira' }}</td>
     <td>
@@ -58,6 +59,17 @@
         <div class="field"><label for="k_env">Ambiente</label><select id="k_env" name="environment"><option value="test">Teste (sk_test_)</option><option value="live">Produção (sk_live_)</option></select></div>
         <div class="field"><label for="k_exp">Validade</label><select id="k_exp" name="expires_in"><option value="">Sem expiração</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option></select></div>
       </div>
+      {% if channels %}
+      <fieldset style="border:0;padding:0;margin:0">
+        <legend class="label mb-1">Números</legend>
+        <span class="hint">Marque só os números deste sistema. Sem nenhum marcado, vale para todos os números da conta.</span>
+        <div class="check-grid">
+          {% for c in channels %}
+          <label class="check-card"><input type="checkbox" name="phone_number_ids" value="{{ c.phone_number_id }}"><div><strong>{{ c.display_phone_number or c.phone_number_id }}</strong><span>{{ c.verified_name or c.phone_number_id }}</span></div></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      {% endif %}
       <fieldset style="border:0;padding:0;margin:0">
         <legend class="label mb-1">Escopos</legend>
         <div class="check-grid">

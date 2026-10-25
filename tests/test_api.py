@@ -8,7 +8,7 @@ import pytest
 import requests
 import responses
 
-from tests.conftest import GRAPH, OTHER_ORG_ID, PHONE_A, PHONE_B, TEST_ORG_ID, WABA_A, auth
+from tests.conftest import CONN_A_ID, GRAPH, OTHER_ORG_ID, PHONE_A, PHONE_B, TEST_ORG_ID, WABA_A, auth
 
 SEND_URL = f"/api/v1/whatsapp/{PHONE_A}/messages"
 META_SEND = f"{GRAPH}/{PHONE_A}/messages"
@@ -212,6 +212,53 @@ class TestIdempotency:
         r = client.post(SEND_URL, json={"to": "5511999998888", "type": "text", "text": {"body": "x"}},
                         headers={**auth(make_key()), "Idempotency-Key": "curta"})
         assert r.status_code == 400
+
+
+PHONE_A2 = "333333333333333"
+
+
+class TestKeyRestrictedToNumbers:
+    @pytest.fixture(autouse=True)
+    def second_number(self, fake_db):
+        fake_db.insert_row("meta_connections", {
+            "id": "00000000-0000-4000-8000-00000000c0a2", "organization_id": TEST_ORG_ID, "waba_id": WABA_A,
+            "phone_number_id": PHONE_A2, "display_phone_number": "+55 11 4000-0003", "status": "active",
+            "connected_at": "2026-10-02T12:00:00+00:00"})
+
+    def test_cannot_send_from_other_number(self, client, make_key):
+        key = make_key(phone_number_ids=[PHONE_A2])
+        r = client.post(SEND_URL, json={"to": "5511999998888", "type": "text", "text": {"body": "x"}},
+                        headers=auth(key))
+        assert r.status_code == 404
+        assert r.get_json()["error"]["code"] == "channel_not_found"
+
+    @responses.activate
+    def test_can_send_from_own_number(self, client, make_key):
+        responses.add(responses.POST, META_SEND, json={"messages": [{"id": "wamid.OK"}]})
+        r = client.post(SEND_URL, json={"to": "5511999998888", "type": "text", "text": {"body": "x"}},
+                        headers=auth(make_key(phone_number_ids=[PHONE_A])))
+        assert r.status_code == 201
+
+    def test_channels_lists_only_own_numbers(self, client, make_key):
+        r = client.get("/api/v1/channels", headers=auth(make_key(phone_number_ids=[PHONE_A2])))
+        assert [c["phone_number_id"] for c in r.get_json()["data"]] == [PHONE_A2]
+
+    def test_unrestricted_key_sees_all_numbers(self, client, make_key):
+        r = client.get("/api/v1/channels", headers=auth(make_key()))
+        assert {c["phone_number_id"] for c in r.get_json()["data"]} == {PHONE_A, PHONE_A2}
+
+    def test_messages_of_other_number_hidden(self, client, make_key, fake_db):
+        fake_db.insert_row("messages", {"organization_id": TEST_ORG_ID, "connection_id": CONN_A_ID,
+                                        "direction": "inbound", "contact_wa_id": "5511", "type": "text",
+                                        "status": "received", "wamid": "wamid.DOA"})
+        key = make_key(phone_number_ids=[PHONE_A2])
+        assert client.get("/api/v1/messages", headers=auth(key)).get_json()["data"] == []
+        assert client.get("/api/v1/messages/wamid.DOA", headers=auth(key)).status_code == 404
+
+    def test_invalid_phone_number_id_rejected(self, app):
+        from app.services import api_keys
+        with app.app_context(), pytest.raises(ValueError):
+            api_keys.create_api_key(TEST_ORG_ID, "x", phone_number_ids=["abc"])
 
 
 class TestOtherEndpoints:

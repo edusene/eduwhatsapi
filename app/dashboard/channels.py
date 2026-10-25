@@ -66,7 +66,7 @@ def channel_detail(connection_id: str):
         own_webhook_url=f"{current_app.config['APP_BASE_URL']}/webhooks/meta/{connection['id']}",
         own_verify_token=connections.webhook_verify_token(connection) if own_app else None,
         languages=_LANGUAGES,
-        recent=messaging.list_messages(current_org_id(), phone_number_id=connection.get("phone_number_id"),
+        recent=messaging.list_messages(current_org_id(), phone_number_ids=[connection.get("phone_number_id")],
                                        limit=10) if connection.get("phone_number_id") else [],
     )
 

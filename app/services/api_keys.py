@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import re
 import secrets
 from datetime import datetime, timezone
 from typing import Any
@@ -31,6 +32,16 @@ SCOPES = {
 ALL_SCOPES = sorted(SCOPES)
 DEFAULT_SCOPES = list(ALL_SCOPES)
 PREFIX_LEN = 16
+PHONE_NUMBER_ID_RE = re.compile(r"\d{5,25}")
+
+
+def clean_phone_number_ids(values: list[str] | None) -> list[str]:
+    """Lista de phone_number_id válidos, sem repetição. Vazia = todos os números."""
+    ids = sorted({str(v).strip() for v in (values or []) if str(v).strip()})
+    invalid = [v for v in ids if not PHONE_NUMBER_ID_RE.fullmatch(v)]
+    if invalid:
+        raise ValueError(f"phone_number_id inválido: {', '.join(invalid)}")
+    return ids
 
 
 def _generate_secret(environment: str) -> str:
@@ -44,6 +55,7 @@ def _public_view(row: dict[str, Any]) -> dict[str, Any]:
         "name": row["name"],
         "environment": row["environment"],
         "scopes": row.get("scopes") or [],
+        "phone_number_ids": row.get("phone_number_ids") or [],
         "key_hint": f"{row['key_prefix']}…{row.get('key_suffix', '')}",
         "created_at": row.get("created_at"),
         "last_used_at": row.get("last_used_at"),
@@ -59,6 +71,7 @@ def create_api_key(
     scopes: list[str] | None = None,
     created_by: str | None = None,
     expires_at: str | None = None,
+    phone_number_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if environment not in VALID_ENVIRONMENTS:
         raise ValueError("Ambiente inválido: use 'test' ou 'live'.")
@@ -79,6 +92,7 @@ def create_api_key(
         "key_suffix": secret[-4:],
         "key_hash": hash_api_key(secret),
         "scopes": scopes,
+        "phone_number_ids": clean_phone_number_ids(phone_number_ids),
         "created_by": created_by,
         "expires_at": expires_at,
     }
@@ -104,7 +118,7 @@ def verify_api_key(secret: str) -> dict[str, Any] | None:
     result = (
         client.table("api_keys")
         .select("id, organization_id, name, environment, scopes, expires_at, revoked_at,"
-                " last_used_at")
+                " last_used_at, phone_number_ids")
         .eq("key_hash", hash_api_key(secret))
         .execute()
     )
@@ -137,7 +151,7 @@ def list_api_keys(organization_id: str) -> list[dict[str, Any]]:
     result = (
         get_service_client()
         .table("api_keys")
-        .select("id, name, environment, scopes, key_prefix, key_suffix,"
+        .select("id, name, environment, scopes, phone_number_ids, key_prefix, key_suffix,"
                 " created_at, last_used_at, expires_at, revoked_at")
         .eq("organization_id", organization_id)
         .order("created_at", desc=True)

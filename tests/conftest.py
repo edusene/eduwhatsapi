@@ -95,9 +95,10 @@ def viewer(client, seed):
 
 @pytest.fixture()
 def make_key(app, seed):
-    def _make(org_id: str = TEST_ORG_ID, environment: str = "live", scopes=None) -> str:
+    def _make(org_id: str = TEST_ORG_ID, environment: str = "live", scopes=None, phone_number_ids=None) -> str:
         with app.app_context():
-            return api_keys.create_api_key(org_id, "Teste", environment=environment, scopes=scopes)["key"]
+            return api_keys.create_api_key(org_id, "Teste", environment=environment, scopes=scopes,
+                                           phone_number_ids=phone_number_ids)["key"]
     return _make
 
 

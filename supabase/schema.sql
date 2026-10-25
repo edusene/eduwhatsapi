@@ -163,6 +163,8 @@ create table if not exists public.api_keys (
 );
 comment on table public.api_keys is 'Chaves internas (sk_test_/sk_live_). Apenas hash HMAC é armazenado.';
 create index if not exists idx_api_keys_org on public.api_keys (organization_id);
+-- Números (phone_number_id) que a chave pode usar; lista vazia = todos da organização.
+alter table public.api_keys add column if not exists phone_number_ids jsonb not null default '[]'::jsonb;
 
 -- --------------------------------------------------------------------------
 -- Contatos e conversas (somente plano api_chat)
@@ -248,6 +250,8 @@ create table if not exists public.webhook_endpoints (
 );
 comment on table public.webhook_endpoints is 'URLs HTTPS de clientes, validadas contra SSRF no backend.';
 create index if not exists idx_webhook_endpoints_org on public.webhook_endpoints (organization_id);
+-- Números cujos eventos o endpoint recebe; lista vazia = todos da organização.
+alter table public.webhook_endpoints add column if not exists phone_number_ids jsonb not null default '[]'::jsonb;
 
 create table if not exists public.webhook_deliveries (
     id              uuid primary key default gen_random_uuid(),
@@ -503,9 +507,10 @@ grant select (id, organization_id, channel, waba_id, phone_number_id, display_ph
               quality_rating, name_status, webhook_subscribed, registered, last_error)
     on public.meta_connections to authenticated;
 grant select (id, organization_id, name, environment, key_prefix, key_suffix, scopes, created_by,
-              last_used_at, expires_at, revoked_at, created_at)
+              last_used_at, expires_at, revoked_at, created_at, phone_number_ids)
     on public.api_keys to authenticated;
-grant select (id, organization_id, url, description, events, status, created_by, created_at, updated_at)
+grant select (id, organization_id, url, description, events, status, created_by, created_at, updated_at,
+              phone_number_ids)
     on public.webhook_endpoints to authenticated;
 grant select (id, organization_id, email, role, invited_by, expires_at, accepted_at, revoked_at, created_at)
     on public.organization_invitations to authenticated;

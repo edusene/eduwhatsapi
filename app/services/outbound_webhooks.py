@@ -34,6 +34,7 @@ import requests
 from flask import current_app
 
 from app.services import audit, tasks
+from app.services.api_keys import clean_phone_number_ids
 from app.services.encryption import DecryptionError, EncryptionNotConfigured, decrypt_token, encrypt_token
 from app.services.security import hmac_sha256_hex
 from app.services.supabase_client import get_service_client
@@ -133,6 +134,7 @@ def _public_view(row: dict[str, Any]) -> dict[str, Any]:
         "url": row["url"],
         "description": row.get("description"),
         "events": row.get("events") or [],
+        "phone_number_ids": row.get("phone_number_ids") or [],
         "status": row.get("status"),
         "created_at": row.get("created_at"),
     }
@@ -149,9 +151,11 @@ def _validate_events(events: list[str]) -> list[str]:
 
 
 def create_endpoint(org_id: str, url: str, events: list[str], description: str | None = None,
-                    created_by: str | None = None) -> dict[str, Any]:
+                    created_by: str | None = None,
+                    phone_number_ids: list[str] | None = None) -> dict[str, Any]:
     url = validate_webhook_url(url)
     events = _validate_events(events)
+    phone_number_ids = clean_phone_number_ids(phone_number_ids)
     description = (description or "").strip()[:200] or None
     secret = _new_secret()
     record = get_service_client().table("webhook_endpoints").insert({
@@ -159,22 +163,26 @@ def create_endpoint(org_id: str, url: str, events: list[str], description: str |
         "url": url,
         "description": description,
         "events": events,
+        "phone_number_ids": phone_number_ids,
         "secret_encrypted": encrypt_token(secret),
         "status": "active",
         "created_by": created_by,
     }).execute().data[0]
     audit.log_action(org_id, created_by, "webhook_endpoint.created", "webhook_endpoint",
-                     record["id"], {"url": url, "events": events})
+                     record["id"], {"url": url, "events": events, "phone_number_ids": phone_number_ids})
     view = _public_view(record)
     view["secret"] = secret  # exibido apenas nesta resposta
     return view
 
 
 def update_endpoint(org_id: str, endpoint_id: str, *, events: list[str] | None = None,
-                    status: str | None = None, user_id: str | None = None) -> bool:
+                    status: str | None = None, user_id: str | None = None,
+                    phone_number_ids: list[str] | None = None) -> bool:
     changes: dict[str, Any] = {}
     if events is not None:
         changes["events"] = _validate_events(events)
+    if phone_number_ids is not None:
+        changes["phone_number_ids"] = clean_phone_number_ids(phone_number_ids)
     if status is not None:
         if status not in ("active", "disabled"):
             raise ValueError("Status inválido.")
@@ -194,7 +202,7 @@ def update_endpoint(org_id: str, endpoint_id: str, *, events: list[str] | None =
 def list_endpoints(org_id: str) -> list[dict[str, Any]]:
     rows = (
         get_service_client().table("webhook_endpoints")
-        .select("id, url, description, events, status, created_at")
+        .select("id, url, description, events, phone_number_ids, status, created_at")
         .eq("organization_id", org_id).order("created_at", desc=True).execute().data
     )
     return [_public_view(r) for r in rows]
@@ -363,15 +371,20 @@ def enqueue_event(org_id: str, event_type: str, payload: dict[str, Any],
     try:
         client = get_service_client()
         query = (
-            client.table("webhook_endpoints").select("id, events")
+            client.table("webhook_endpoints").select("id, events, phone_number_ids")
             .eq("organization_id", org_id).eq("status", "active")
         )
         if only_endpoint_id:
             query = query.eq("id", only_endpoint_id)
         endpoints = query.execute().data
         now = _utcnow()
+        event_phones = _event_phone_numbers(client, org_id, payload)
         for endpoint in endpoints:
             if event_type != "test" and event_type not in (endpoint.get("events") or []):
+                continue
+            allowed = endpoint.get("phone_number_ids") or []
+            # Endpoint restrito a números: só recebe eventos desses números.
+            if allowed and event_type != "test" and not event_phones & set(allowed):
                 continue
             inserted = client.table("webhook_deliveries").insert({
                 "organization_id": org_id,
@@ -391,6 +404,17 @@ def enqueue_event(org_id: str, event_type: str, payload: dict[str, Any],
     except Exception:
         logger.exception("Falha ao enfileirar evento %s para org %s", event_type, org_id)
     return created
+
+
+def _event_phone_numbers(client: Any, org_id: str, payload: dict[str, Any]) -> set[str]:
+    """Números a que o evento se refere (direto, ou todos os números da WABA)."""
+    if payload.get("phone_number_id"):
+        return {str(payload["phone_number_id"])}
+    if payload.get("waba_id"):
+        rows = (client.table("meta_connections").select("phone_number_id")
+                .eq("organization_id", org_id).eq("waba_id", str(payload["waba_id"])).execute().data)
+        return {str(r["phone_number_id"]) for r in rows}
+    return set()
 
 
 def send_test_event(org_id: str, endpoint_id: str) -> bool:

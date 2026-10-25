@@ -13,7 +13,7 @@ import responses
 
 from app.services import outbound_webhooks
 from app.services.encryption import encrypt_token
-from tests.conftest import CONN_A_ID, OTHER_ORG_ID, PHONE_A, PHONE_B, TEST_ORG_ID
+from tests.conftest import CONN_A_ID, OTHER_ORG_ID, PHONE_A, PHONE_B, TEST_ORG_ID, WABA_A
 
 SECRET = "test-webhook-secret"
 
@@ -201,6 +201,22 @@ class TestOutboundSecurity:
         assert row["endpoint_id"] == endpoint["id"]
         assert row["status"] == "pending" and row["attempts"] == 1 and row["next_retry_at"]
         assert row["locked_until"] is None
+
+    def test_endpoint_restricted_to_number(self, app, seed, fake_db, public_dns):
+        fake_db.insert_row("meta_connections", {"organization_id": TEST_ORG_ID, "waba_id": WABA_A,
+                                                "phone_number_id": "333333333333333", "status": "active"})
+        with app.app_context():
+            outbound_webhooks.create_endpoint(TEST_ORG_ID, "https://example.com/hook", ["message.received"],
+                                              phone_number_ids=["333333333333333"])
+            with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+                rsps.add(responses.POST, "https://example.com/hook", status=200)
+                assert outbound_webhooks.enqueue_event(TEST_ORG_ID, "message.received",
+                                                       {"phone_number_id": PHONE_A}) == 0
+                assert outbound_webhooks.enqueue_event(TEST_ORG_ID, "message.received",
+                                                       {"phone_number_id": "333333333333333"}) == 1
+                # Evento só com waba_id (ex.: status de modelo) vale para os números da WABA.
+                assert outbound_webhooks.enqueue_event(TEST_ORG_ID, "message.received",
+                                                       {"waba_id": WABA_A}) == 1
 
     def test_max_attempts_marks_failed(self, app, seed, fake_db, public_dns):
         with app.app_context():

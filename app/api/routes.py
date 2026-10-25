@@ -46,10 +46,27 @@ def _channel_view(row: dict) -> dict:
     return {k: row.get(k) for k in _CHANNEL_PUBLIC_FIELDS}
 
 
+def _key_phones() -> set[str]:
+    """Números que a chave pode usar; vazio = todos os números da organização."""
+    return set(g.api_key.get("phone_number_ids") or [])
+
+
+def _key_allows_connection(connection_id: str | None) -> bool:
+    allowed = _key_phones()
+    if not allowed:
+        return True
+    return any(c["id"] == connection_id and c.get("phone_number_id") in allowed
+               for c in connections.list_connections(g.organization_id))
+
+
 def _connection_or_error(phone_number_id: str):
     """Conexão ativa da org da chave, ou resposta de erro (sem vazar outras orgs)."""
     if not _PHONE_NUMBER_ID_RE.fullmatch(phone_number_id):
         return None, error_response("validation_error", "phone_number_id inválido.", 400)
+    allowed = _key_phones()
+    if allowed and phone_number_id not in allowed:
+        # Chave restrita: outro número é tratado como inexistente.
+        return None, error_response("channel_not_found", "Nenhum número ativo com este phone_number_id.", 404)
     connection = connections.get_active_by_phone(g.organization_id, phone_number_id)
     if not connection:
         return None, error_response("channel_not_found", "Nenhum número ativo com este phone_number_id.", 404)
@@ -83,6 +100,9 @@ def me():
 @require_api_key("channels:read")
 def channels_list():
     rows = connections.list_connections(g.organization_id, include_disconnected=False)
+    allowed = _key_phones()
+    if allowed:
+        rows = [r for r in rows if r.get("phone_number_id") in allowed]
     return jsonify({"data": [_channel_view(r) for r in rows]})
 
 
@@ -166,7 +186,11 @@ def messages_list():
             datetime.fromisoformat(before.replace("Z", "+00:00"))
         except ValueError as exc:
             raise schemas.ValidationError("before deve ser uma data ISO 8601.", "invalid_field", "before") from exc
-    rows = messaging.list_messages(g.organization_id, phone_number_id=phone, direction=direction,
+    allowed = _key_phones()
+    if allowed and phone and phone not in allowed:
+        return jsonify({"data": [], "next_before": None})
+    phones = [phone] if phone else sorted(allowed) or None
+    rows = messaging.list_messages(g.organization_id, phone_number_ids=phones, direction=direction,
                                    contact=contact, limit=_int_arg("limit", 50, 1, 100), before=before)
     next_before = rows[-1]["created_at"] if len(rows) == _int_arg("limit", 50, 1, 100) else None
     return jsonify({"data": rows, "next_before": next_before})
@@ -178,7 +202,7 @@ def message_get(message_id: str):
     if not (_UUID_RE.fullmatch(message_id) or (message_id.startswith("wamid.") and len(message_id) <= 256)):
         return error_response("validation_error", "Use o id interno (UUID) ou o wamid da mensagem.", 400)
     message = messaging.get_message(g.organization_id, message_id)
-    if not message:
+    if not message or not _key_allows_connection(message.get("connection_id")):
         return error_response("message_not_found", "Mensagem não encontrada.", 404)
     return jsonify({"data": message})
 
@@ -355,6 +379,10 @@ def conversations_list():
         return error
     rows = messaging.list_conversations(g.organization_id, status=request.args.get("status"),
                                         limit=_int_arg("limit", 50, 1, 200))
+    allowed = _key_phones()
+    if allowed:
+        # shortcut: filtra depois do limit, então pode vir menos que `limit`; filtrar no banco se incomodar.
+        rows = [r for r in rows if r["channel"]["phone_number_id"] in allowed]
     return jsonify({"data": rows})
 
 
@@ -364,7 +392,8 @@ def conversation_messages(conversation_id: str):
     error = _chat_plan_or_error()
     if error:
         return error
-    if not _UUID_RE.fullmatch(conversation_id) or not messaging.get_conversation(g.organization_id, conversation_id):
+    conversation = messaging.get_conversation(g.organization_id, conversation_id) if _UUID_RE.fullmatch(conversation_id) else None
+    if not conversation or not _key_allows_connection(conversation["connection_id"]):
         return error_response("conversation_not_found", "Conversa não encontrada.", 404)
     rows = messaging.conversation_messages(g.organization_id, conversation_id,
                                            limit=_int_arg("limit", 100, 1, 200))
