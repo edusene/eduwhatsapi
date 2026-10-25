@@ -1,0 +1,10 @@
+{% macro pager(page, has_next) %}
+{% if page > 1 or has_next %}
+{% set args = request.args.to_dict() %}
+<nav class="row-between mt-2" aria-label="Paginação">
+  {% if page > 1 %}<a class="btn btn-sm" href="{{ url_for(request.endpoint, **dict(request.view_args, **dict(args, page=page - 1))) }}">Anterior</a>{% else %}<span></span>{% endif %}
+  <span class="small muted">Página {{ page }}</span>
+  {% if has_next %}<a class="btn btn-sm" href="{{ url_for(request.endpoint, **dict(request.view_args, **dict(args, page=page + 1))) }}">Próxima</a>{% else %}<span></span>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

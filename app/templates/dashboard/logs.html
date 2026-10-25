@@ -1,8 +1,9 @@
 {% extends "layouts/app.html" %}
 {% from "_icons.html" import icon %}
+{% from "dashboard/_pager.html" import pager with context %}
 {% block title %}Logs — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Logs</h1><p>Últimos 100 registros. Nenhum log guarda tokens, cabeçalhos de autenticação ou texto de mensagens.</p></div></div>
+<div class="page-head"><div><h1>Logs</h1><p>Mais recentes primeiro. Nenhum log guarda tokens, cabeçalhos de autenticação ou texto de mensagens.</p></div></div>
 <nav class="tabs" aria-label="Tipos de log">
   <a href="{{ url_for('dashboard.logs', tab='api') }}" class="{% if tab == 'api' %}active{% endif %}">Requisições à API</a>
   <a href="{{ url_for('dashboard.logs', tab='events') }}" class="{% if tab == 'events' %}active{% endif %}">Eventos da Meta</a>
@@ -63,4 +64,5 @@
 <div class="card"><div class="empty">{{ icon('shield') }}<p>Nenhuma ação registrada ainda.</p></div></div>
 {% endif %}
 {% endif %}
+{{ pager(page, has_next) }}
 {% endblock %}

@@ -333,7 +333,8 @@ def handle_status(connection: dict[str, Any], status: dict[str, Any]) -> None:
 # Consultas
 # ---------------------------------------------------------------------------
 def list_messages(org_id: str, *, phone_number_ids: list[str] | None = None, direction: str | None = None,
-                  contact: str | None = None, limit: int = 50, before: str | None = None) -> list[dict[str, Any]]:
+                  contact: str | None = None, limit: int = 50, before: str | None = None,
+                  offset: int = 0) -> list[dict[str, Any]]:
     query = get_service_client().table("messages").select(MESSAGE_PUBLIC_FIELDS).eq("organization_id", org_id)
     if phone_number_ids:
         conn_ids = [c["id"] for c in connections.list_connections(org_id)
@@ -347,7 +348,8 @@ def list_messages(org_id: str, *, phone_number_ids: list[str] | None = None, dir
         query = query.eq("contact_wa_id", contact)
     if before:
         query = query.lt("created_at", before)
-    rows = query.order("created_at", desc=True).limit(max(1, min(limit, 100))).execute().data
+    limit = max(1, min(limit, 100))
+    rows = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute().data
     return [public_message(r) for r in rows]
 
 
@@ -362,9 +364,12 @@ def get_message(org_id: str, message_id: str) -> dict[str, Any] | None:
 
 
 def list_conversations(org_id: str, *, status: str | None = None, assigned_to: str | None = None,
-                       search: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+                       search: str | None = None, limit: int = 50,
+                       connection_id: str | None = None) -> list[dict[str, Any]]:
     client = get_service_client()
     query = client.table("conversations").select("*").eq("organization_id", org_id)
+    if connection_id:
+        query = query.eq("connection_id", connection_id)
     if status in ("open", "resolved"):
         query = query.eq("status", status)
     if assigned_to:

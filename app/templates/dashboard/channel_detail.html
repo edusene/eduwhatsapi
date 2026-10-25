@@ -1,5 +1,6 @@
 {% extends "layouts/app.html" %}
 {% from "_icons.html" import icon %}
+{% from "dashboard/_pager.html" import pager with context %}
 {% block title %}{{ c.verified_name or c.display_phone_number or 'Número' }} — {{ app_name }}{% endblock %}
 {% block content %}
 {% set can_admin = membership.role in ('owner', 'admin') %}
@@ -115,6 +116,7 @@
           </tr>{% endfor %}
         </tbody>
       </table></div>
+      <div style="padding:0 16px 16px">{{ pager(page, has_next) }}</div>
       {% else %}
       <div class="empty">{{ icon('send') }}<p>Nenhuma mensagem por este número ainda.</p></div>
       {% endif %}

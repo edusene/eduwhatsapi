@@ -7,7 +7,7 @@ import re
 
 from flask import current_app, flash, g, redirect, render_template, request, url_for
 
-from app.dashboard import bp
+from app.dashboard import PAGE_SIZE, bp, page_arg
 from app.extensions import limiter
 from app.meta.adapters import get_adapter
 from app.meta.graph_api import MetaAPIError
@@ -57,6 +57,10 @@ def channel_detail(connection_id: str):
         except (MetaAPIError, connections.ConnectionError_) as exc:
             templates_error = getattr(exc, "message", None) or str(exc)
     own_app = bool(connection.get("app_secret_encrypted"))
+    page = page_arg()
+    recent = messaging.list_messages(
+        current_org_id(), phone_number_ids=[connection["phone_number_id"]], limit=PAGE_SIZE + 1,
+        offset=(page - 1) * PAGE_SIZE) if connection.get("phone_number_id") else []
     return render_template(
         "dashboard/channel_detail.html",
         c=connections.public_view(connection),
@@ -66,8 +70,9 @@ def channel_detail(connection_id: str):
         own_webhook_url=f"{current_app.config['APP_BASE_URL']}/webhooks/meta/{connection['id']}",
         own_verify_token=connections.webhook_verify_token(connection) if own_app else None,
         languages=_LANGUAGES,
-        recent=messaging.list_messages(current_org_id(), phone_number_ids=[connection.get("phone_number_id")],
-                                       limit=10) if connection.get("phone_number_id") else [],
+        recent=recent[:PAGE_SIZE],
+        page=page,
+        has_next=len(recent) > PAGE_SIZE,
     )
 
 

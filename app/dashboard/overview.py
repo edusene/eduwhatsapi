@@ -5,7 +5,7 @@ import logging
 
 from flask import flash, redirect, render_template, request, url_for
 
-from app.dashboard import bp
+from app.dashboard import bp, page_arg, paginate
 from app.extensions import limiter
 from app.services import api_keys, audit, connections, organizations, outbound_webhooks, usage
 from app.services.organizations import current_org_id, current_user_id, org_required, require_role
@@ -62,17 +62,16 @@ def logs():
     tab = request.args.get("tab", "api")
     status_filter = request.args.get("status", "")
     client = get_service_client()
+    page = page_arg()
     api_logs, events, audits = [], [], []
     if tab == "events":
-        events = (
+        events, has_next = paginate(
             client.table("webhook_events").select("id, received_at, event_type, status, payload")
-            .eq("organization_id", org_id).order("received_at", desc=True).limit(100).execute().data
-        )
+            .eq("organization_id", org_id).order("received_at", desc=True), page)
     elif tab == "audit":
-        audits = (
+        audits, has_next = paginate(
             client.table("audit_logs").select("id, created_at, action, target_type, actor_user_id, metadata")
-            .eq("organization_id", org_id).order("created_at", desc=True).limit(100).execute().data
-        )
+            .eq("organization_id", org_id).order("created_at", desc=True), page)
     else:
         tab = "api"
         query = (
@@ -82,10 +81,11 @@ def logs():
         )
         if status_filter == "errors":
             query = query.gte("status_code", 400)
-        api_logs = query.order("created_at", desc=True).limit(100).execute().data
+        api_logs, has_next = paginate(query.order("created_at", desc=True), page)
     member_emails = {m["user_id"]: m.get("email") for m in organizations.list_members(org_id)}
     return render_template("dashboard/logs.html", tab=tab, status_filter=status_filter, api_logs=api_logs,
-                           events=events, audits=audits, member_emails=member_emails)
+                           events=events, audits=audits, member_emails=member_emails,
+                           page=page, has_next=has_next)
 
 
 @bp.get("/settings")

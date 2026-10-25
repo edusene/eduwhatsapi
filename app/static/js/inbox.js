@@ -109,6 +109,8 @@
     if (state.filter === 'mine') { params.set('mine', '1'); params.set('status', 'open'); }
     else params.set('status', state.filter);
     if (state.query) params.set('q', state.query);
+    var channel = document.getElementById('convChannel');
+    if (channel && channel.value) params.set('connection_id', channel.value);
     return AZ.json(API + '/conversations?' + params.toString())
       .then(function (data) {
         state.conversations = data.conversations || [];
@@ -507,6 +509,8 @@
       b.classList.toggle('active', b.getAttribute('data-filter') === state.filter);
     });
   }
+  var channelSelect = document.getElementById('convChannel');
+  if (channelSelect) channelSelect.addEventListener('change', loadConversations);
   document.querySelectorAll('[data-filter]').forEach(function (b) {
     b.addEventListener('click', function () { state.filter = b.getAttribute('data-filter'); setFilterButtons(); loadConversations(); });
   });

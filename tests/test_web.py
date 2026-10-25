@@ -130,6 +130,28 @@ class TestDashboardPages:
         assert r.status_code == 200, url
         assert b"Org A" in r.data or b"AutoZap" in r.data
 
+    def test_logs_paginate(self, owner, fake_db):
+        for i in range(30):
+            fake_db.insert_row("audit_logs", {"organization_id": TEST_ORG_ID, "action": f"acao.{i:02d}",
+                                              "created_at": f"2026-10-01T12:{i:02d}:00+00:00"})
+        first = owner.get("/dashboard/logs?tab=audit").data.decode()
+        assert "acao.29" in first and "acao.04" not in first and "page=2" in first
+        second = owner.get("/dashboard/logs?tab=audit&page=2").data.decode()
+        assert "acao.04" in second and "acao.29" not in second and "Anterior" in second
+        assert owner.get("/dashboard/logs?tab=audit&page=abc").status_code == 200
+
+    def test_inbox_filters_by_number(self, owner, fake_db):
+        other = fake_db.insert_row("meta_connections", {"organization_id": TEST_ORG_ID, "waba_id": WABA_A,
+                                                        "phone_number_id": "333333333333333", "status": "active"})
+        for conn_id, wa_id in ((CONN_A_ID, "5511900000001"), (other["id"], "5511900000002")):
+            contact = fake_db.insert_row("contacts", {"organization_id": TEST_ORG_ID, "wa_id": wa_id})
+            fake_db.insert_row("conversations", {"organization_id": TEST_ORG_ID, "connection_id": conn_id,
+                                                 "contact_id": contact["id"], "status": "open"})
+        listed = owner.get(f"/dashboard/inbox/api/conversations?status=open&connection_id={CONN_A_ID}").get_json()
+        assert [c["contact"]["wa_id"] for c in listed["conversations"]] == ["5511900000001"]
+        everything = owner.get("/dashboard/inbox/api/conversations?status=open&connection_id=lixo").get_json()
+        assert len(everything["conversations"]) == 2
+
     def test_channels_page_allows_facebook_sdk_only_there(self, owner):
         r = owner.get("/dashboard/channels")
         assert "connect.facebook.net" in r.headers["Content-Security-Policy"]

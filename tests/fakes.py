@@ -69,6 +69,7 @@ class FakeQuery:
         self._filters: list[tuple[str, str, Any]] = []
         self._order: tuple[str, bool] | None = None
         self._limit: int | None = None
+        self._offset = 0
         self._count = False
         self._on_conflict: tuple[str, ...] | None = None
         self._ignore_duplicates = False
@@ -124,6 +125,10 @@ class FakeQuery:
         self._limit = n
         return self
 
+    def range(self, start: int, end: int):
+        self._offset, self._limit = start, end - start + 1
+        return self
+
     # -- execução -----------------------------------------------------------
     def execute(self) -> FakeResponse:
         db = self._db
@@ -160,7 +165,7 @@ class FakeQuery:
             result = sorted(result, key=lambda r: (r.get(col) is None, r.get(col) or ""), reverse=desc)
         total = len(result)
         if self._limit is not None:
-            result = result[: self._limit]
+            result = result[self._offset: self._offset + self._limit]
         return FakeResponse(data=copy.deepcopy(result), count=total if self._count else None)
 
     def _matches(self, row: dict) -> bool:

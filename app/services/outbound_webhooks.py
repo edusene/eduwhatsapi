@@ -236,12 +236,13 @@ def rotate_secret(org_id: str, endpoint_id: str, user_id: str | None = None) -> 
     return view
 
 
-def list_deliveries(org_id: str, limit: int = 50) -> list[dict[str, Any]]:
+def list_deliveries(org_id: str, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     return (
         get_service_client().table("webhook_deliveries")
         .select("id, endpoint_id, event_type, status, attempts, max_attempts, response_status,"
                 " last_error, next_retry_at, delivered_at, created_at")
-        .eq("organization_id", org_id).order("created_at", desc=True).limit(limit).execute().data
+        .eq("organization_id", org_id).order("created_at", desc=True)
+        .range(offset, offset + limit - 1).execute().data
     )
 
 

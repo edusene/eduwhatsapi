@@ -88,9 +88,11 @@ def inbox():
 @chat_required
 def inbox_conversations():
     mine = request.args.get("mine") == "1"
+    connection_id = request.args.get("connection_id", "")
     rows = messaging.list_conversations(
         current_org_id(), status=request.args.get("status") or None,
-        assigned_to=current_user_id() if mine else None, search=request.args.get("q"), limit=100)
+        assigned_to=current_user_id() if mine else None, search=request.args.get("q"), limit=100,
+        connection_id=connection_id if _UUID_RE.fullmatch(connection_id) else None)
     return jsonify({"ok": True, "conversations": rows})
 
 

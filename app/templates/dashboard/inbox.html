@@ -16,6 +16,10 @@
         </div>
         <div class="search">{{ icon('search', 'icon-sm') }}<label class="sr-only" for="convSearch">Buscar conversa</label>
           <input class="input" id="convSearch" type="search" placeholder="Buscar por nome ou número"></div>
+        {% if channels|length > 1 %}
+        <label class="sr-only" for="convChannel">Número</label>
+        <select class="input" id="convChannel"><option value="">Todos os números</option>{% for c in channels %}<option value="{{ c.id }}">{{ c.display_phone_number or c.phone_number_id }}{% if c.verified_name %} — {{ c.verified_name }}{% endif %}</option>{% endfor %}</select>
+        {% endif %}
         <div class="inbox-filters" role="group" aria-label="Filtrar conversas">
           <button type="button" data-filter="open" class="active">Abertas</button>
           <button type="button" data-filter="mine">Minhas</button>

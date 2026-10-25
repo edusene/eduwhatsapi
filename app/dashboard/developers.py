@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import flash, redirect, render_template, request, url_for
 
-from app.dashboard import bp
+from app.dashboard import PAGE_SIZE, bp, page_arg
 from app.extensions import limiter
 from app.services import api_keys, connections, outbound_webhooks
 from app.services.encryption import EncryptionNotConfigured
@@ -77,8 +77,10 @@ def webhooks():
     org_id = current_org_id()
     endpoints = outbound_webhooks.list_endpoints(org_id)
     by_id = {e["id"]: e for e in endpoints}
+    page = page_arg()
+    deliveries = outbound_webhooks.list_deliveries(org_id, limit=PAGE_SIZE + 1, offset=(page - 1) * PAGE_SIZE)
     return render_template("dashboard/webhooks.html", endpoints=endpoints, endpoints_by_id=by_id,
-                           deliveries=outbound_webhooks.list_deliveries(org_id),
+                           deliveries=deliveries[:PAGE_SIZE], page=page, has_next=len(deliveries) > PAGE_SIZE,
                            events=outbound_webhooks.EVENTS, channels=_channels())
 
 

@@ -1,5 +1,6 @@
 {% extends "layouts/app.html" %}
 {% from "_icons.html" import icon %}
+{% from "dashboard/_pager.html" import pager with context %}
 {% block title %}Webhooks — {{ app_name }}{% endblock %}
 {% block content %}
 {% set can_admin = membership.role in ('owner', 'admin') %}
@@ -63,6 +64,7 @@
   {% endfor %}
   </tbody>
 </table></div></div>
+{{ pager(page, has_next) }}
 {% else %}
 <div class="card"><div class="empty">{{ icon('activity') }}<p>As entregas aparecem aqui assim que algum evento acontecer.</p></div></div>
 {% endif %}
